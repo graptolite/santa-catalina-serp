@@ -1,0 +1,135 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; org-confirm-babel-evaluate: nil; -*-
+# NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
+# NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
+
+#+TITLE: EBSD Mapping
+* Introduction
+EBSD mapping (performed by Brandon Fish) produced both maps and raw data. Since the maps weren't accompanied by explicit colormap references, the data is plotted using an explicit colormap here.
+* Reading the Data
+Alongside tabulated data in a tab-separated table format, the raw data files also contains metadata for the EBSD analysis. The parts of the metadata describing the sample grid are of interest as they can be used to scale the EBSD map.
+
+#+BEGIN_SRC python :session py
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from mpltern.datasets import get_triangular_grid
+
+import re
+from io import StringIO
+
+# Read raw data.
+with open("../DATASETS/EBSD/raw_data.ctf") as infile:
+    data = infile.read()
+
+# Generalized function for extracting specific data by name from the metadata.
+search_data = lambda key : re.search(f"{key}\t([\S]*)",data).group(1)
+# Extract number of cells (sample points -> pixels) in the x direction.
+x_cells = int(search_data("XCells"))
+# Extract number of cells (sample points -> pixels) in the y direction.
+y_cells = int(search_data("YCells"))
+# Extract width of each cell in the x direction.
+x_step = float(search_data("XStep"))
+# Extract width of each cell in the y direction.
+y_step = float(search_data("YStep"))
+
+# Extract tabular data and parse into a DataFrame.
+table_data = re.search("Phase\t[\s\S]*",data).group(0)
+df = pd.read_csv(StringIO(table_data),sep="\s+")
+#+END_SRC
+* Euler Orientations to RGB Vectors
+The orientations are recorded as Euler angles, which are rotations about 3 mutually orthogonal axes. The specific directions are difficult to determine without a specification. However, the definition of euler angles requires that two of them take a range over $2\pi$ radians and the one takes a range over $\pi$ radian.
+
+One way of mapping all three angles within one pixel is using RGB bands, such that each band is assigned to rotation about each axis. The colormap reference can then be displayed in a ternary plot. For the RGB bands to work, the angles must be normalized to range [0,1]. To determine the method of normalization, the range of each Euler angle must first be determined. In the absence of a specification in the metadata, this can be performed by inspecting the minimum and maximum data values.
+
+#+BEGIN_SRC python :session py :results output
+for i in range(1,4):
+    euler_angle = "Euler%u" % i
+    data = df[euler_angle]
+    print(euler_angle,min(data),max(data))
+#+END_SRC
+
+#+RESULTS:
+: Euler1 0.0 359.94
+: Euler2 0.0 59.163
+: Euler3 0.0 359.96
+
+From this analysis, it seems that Euler1 and Euler3 are the angles with range $2\pi$ radians between 0 and 360 degrees, and Euler2 is the angle with range $\pi$ radian between 0 and 180 degrees (though the upper limit does not seem to have been reached, implying non-randomness of the distribution of rotations about the second Euler pole). Since the lower ends of these angles are all zero, normalization simply involves division of each angle by the range size (in degrees).
+
+#+BEGIN_SRC python :session py
+R_band = df["Euler1"]/360
+G_band = df["Euler2"]/180
+B_band = df["Euler3"]/360
+#+END_SRC
+
+This 1D data can then be converted into a suitably 2D map using the grid size extracted from the metadata, and then combined into a map of RGB color vectors.
+
+#+BEGIN_SRC python :session py
+image_R = R_band.to_numpy().reshape(y_cells,x_cells)
+image_G = G_band.to_numpy().reshape(y_cells,x_cells)
+image_B = B_band.to_numpy().reshape(y_cells,x_cells)
+
+# Combine the bands into a 2D array of RGB vectors.
+combined_img = np.stack([image_R,image_G,image_B],axis=2)
+#+END_SRC
+* Plotting
+** Pixelmap
+The RGB map can be displayed as an image using Matplotlib.
+
+#+BEGIN_SRC python :session py
+plt.figure()
+# Plot map of RGB vectors.
+plt.imshow(combined_img)
+# Set black background.
+plt.gca().set_facecolor("k")
+# Describe axes scales.
+plt.xlabel(f"pix ($\\times$ {x_step:.2f} for microns)")
+plt.ylabel(f"pix ($\\times$ {y_step:.2f} for microns)")
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+This can be cropped for publication.
+
+#+BEGIN_SRC python :session py
+plt.imshow(combined_img)
+
+# Set limits to crop map to just region of interest + a small amount of margin.
+# This can be modified as desired.
+plt.xlim(-5,300)
+plt.ylim(155,25)
+
+plt.gca().set_facecolor("k")
+plt.xlabel(f"pix ($\\times$ {x_step:.2f} for microns)")
+plt.ylabel(f"pix ($\\times$ {y_step:.2f} for microns)")
+
+plt.show()
+#+END_SRC
+** Colormap Legend
+The colormap legend can be represented by a triangular ternary plot, with endmember colors (RGB) forming the 3 vertices.
+
+#+BEGIN_SRC python :session py
+# Sample coordinates that make up an equilateral triangular grid. The three axes each take the range [0,1]. The triangular grid is large (edge length of 100 points) to increase smoothness of the color gradient in the final plot.
+points = np.array(get_triangular_grid(100))
+# Assign colors to each point on the triangular grid based on the relevant combination of R,G,B. Since these blended colors are stored in hexdecimal format, the grid axes ranges are normalized to the range [0,255] and casted to int.
+colours = list(map(lambda RGB : "#{:02x}{:02x}{:02x}".format(*RGB), (points.T*255).astype(int)))
+
+# Initialize ternary plot (ax).
+plt.figure(figsize=(4,4))
+ax = plt.subplot(projection="ternary")
+
+# Plot the colored points. The marker icon was selected after some testing of different options to increase color gradient smoothness.
+ax.scatter(*points,color=colours,marker="^",s=100,rasterized=True)
+# Label the vertices and modify the edge labels to show the correct Euler angle range.
+ax.set_tlabel("$\\alpha$")
+ax.taxis.set_ticks([0,0.5,1],[0,180,360])
+ax.set_llabel("$\\beta$")
+ax.laxis.set_ticks([0,0.5,1],[0,90,180])
+ax.set_rlabel("$\\gamma$")
+ax.raxis.set_ticks([0,0.5,1],[0,180,360])
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None

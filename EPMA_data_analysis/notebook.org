@@ -1,0 +1,573 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; org-confirm-babel-evaluate: nil; -*-
+# NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
+# NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
+
+#+TITLE: EPMA Data Analysis
+* Introduction
+Data collected during EMPA analyses contain weight percent elements (or permit such values to be computed with ease). These observed compositions can be compared against compositions from online databases (with Webmineral being used here) to find the compositionally closest mineral(s).
+
+Though Webmineral's composition querying is limited to 3 elements at most, the 3 most adundant elements tend to combine to constitute the vast majority of the phase's weight. However, it remains useful to manually check the sensibility of results, and to find multiple matches (within some percentage tolerance of the observed composition).
+* Raw Data Processing
+Alongside compositional data in a tab-separated table format, the raw data files also contains metadata for the EPMA analysis. In this case, the two files of interest are =2024-04-16-v1.txt= (magnetites) and =2024-04-17-v1.txt= (silicates).
+
+#+BEGIN_SRC python :session py
+import os
+import pandas as pd
+import re
+from io import StringIO
+
+data_folder = "../DATASETS/EPMA"
+# Construct filepath for first dataset.
+f = os.path.join(data_folder,"2024-04-16-v1.txt")
+#+END_SRC
+
+#+RESULTS:
+
+The compositional data table is first extracted.
+
+#+BEGIN_SRC python :session py
+def extract_table(f):
+    ''' Extracts the main data table from raw EPMA data
+    f | :required: | filepath to EPMA data
+
+    Returns: pd.DataFrame or None
+    '''
+    # Read contents of file.
+    with open(f) as infile:
+        raw_data = infile.read()
+    # Search for a string marker indicating the start of the main data table.
+    table_match = re.search("DataSet/Point[\s\S]*",raw_data)
+    # Check whether a match exists.
+    if table_match:
+        # And if so, convert the extracted table into a Pandas DataFrame object.
+        df = pd.read_csv(StringIO(table_match.group(0)),sep="\t",index_col=False)
+    else:
+        # Otherwise set the data to be returned to None.
+        df = None
+        print("Failed to find start of data table")
+    return df
+
+df = extract_table(f)
+#+END_SRC
+
+#+RESULTS:
+
+Based on a manual determination of the element column cycles, the order is: beam current, peak time, elemental weight, (then elemental oxide weight only in the case of the silicates), limit of determination, standard deviation. Here, the weight is of interest (i.e. index 2 under zero indexing). All other columns can be dropped.
+
+#+BEGIN_SRC python :session py
+def clean_df(df,col_id=".2"):
+    ''' Isolate just the columns of relevance for the analysis in this notebook, and then normalize the element column names.
+    df | :required: | full Pandas DataFrame
+    col_id | :optional: (defaults to ".2") | the column index (in the relevant and sufficiently unique format) for the element columns to keep.
+
+    Returns: pd.DataFrame
+    '''
+    # Select columns to keep, which include the elemental weight columns, as well as the column for Comments (which can be used to manually cross-check standardised group assignment of each datapoint later on).
+    keep_columns = [c for c in df.columns if col_id in c] + ["Comment"]
+    # Extract the columns to keep into another DataFrame.
+    composition_df = df[keep_columns]
+    # Rename the columns so that element names are present on their own (e.g. Si.2 -> Si if col_id is ".2").
+    composition_df.columns = [c.replace(col_id,"").strip() for c in composition_df.columns]
+    return composition_df
+
+composition_df = clean_df(df)
+#+END_SRC
+
+#+RESULTS:
+
+Since these datasets have already been grouped, some manual work is captured in the following code block. If the file (=f=) is modified such that it's not covered by this manual work, then the following code block will have no effect when run.
+
+#+BEGIN_SRC python :session py
+def add_to_df_or_not(composition_df,f):
+    ''' Add manually-derived data to the DataFrame where relevant (and do so in-place), otherwise do nothing. Also provide a more descriptive filename where possible (i.e. where the original filename is manually accounted for). This is an unorthodox function due to the significant use of hardcoding. However, the rationale behind wrapping these steps in a function is to permit easier reproducibility of the results specific to this study.
+
+    composition_df | :required: | DataFrame the compositional data
+    f | :required: | name of the file from which composition_df was derived
+
+    Returns: str
+    '''
+    # Produce more descriptive filename where suitable (where there has been a manual determination).
+    if f.endswith("2024-04-16-v1.txt"):
+        csv_name = "magnetites"
+    elif f.endswith("2024-04-17-v1.txt"):
+        csv_name = "silicates"
+    else:
+        csv_name = os.path.basename(f)
+
+    # Determine whether to add manually-derived group designation or not.
+    insert_minerals = True
+    if csv_name == "magnetites":
+        # Assigned to the sites which can be checked against RL scans of the sites in ../DATASETS/EPMA/sites/*
+        minerals = ["srp","","srp","srp","srp","srp","srp","srp","srp","srp",
+                "srp","srp","srp","srp","srp","srp","srp","srp","srp","srp",
+                "srp","srp","srp","srp","srp","srp","clc","clc","clc","clc",
+                "clc","clc","clc","srp","srp","srp","srp","srp","srp","srp",
+                "srp","","clc","clc","srp","srp","srp","srp","srp","srp",
+                "srp","srp","srp","srp","srp","vein","srp","vein","srp","srp",
+                "vein","srp","srp","srp","srp","srp","srp","srp","srp","srp",
+                "srp","srp","srp","srp","srp","srp","early-clc","early-clc",
+                "early-clc","early-clc","early-clc","early-clc","early-clc",
+                "srp","srp","srp","srp","srp","srp","srp","srp","srp","srp"]
+    elif csv_name == "silicates":
+        minerals = ["","","","","amp","","srp","late-clc","late-clc","early-clc",
+                "early-clc","early-clc","amp","amp","amp","amp","amp","amp",
+                "late-clc","amp","amp","amp","amp","amp","amp","amp","amp",
+                "early-clc","late-clc","chl-vein","chl-vein","qz-vein","qz-vein",
+                "late-clc","srp","srp","srp","srp","srp","srp","srp","srp","srp",
+                "srp","srp","srp","srp","srp-vein","srp","srp","amp","amp","amp",
+                "amp","amp","amp","amp","amp","amp","late-clc","late-clc",
+                "late-clc","late-clc","early-clc","late-clc","chl-vein",
+                "late-clc","late-clc","late-clc","late-clc","late-clc",
+                "late-clc","late-clc","late-clc"]
+    else:
+        insert_minerals = False
+
+    # If there is a manually-derived data to be added.
+    if insert_minerals:
+        try:
+            # Try to add the data as a column with "Mineral" to the front of the DataFrame under the assumption that no column called "Mineral" pre-exists.
+            composition_df.insert(0,"Mineral",minerals)
+        except ValueError:
+            # Otherwise, replace the pre-existing "Mineral" column's contents with the manually-derived data in this function.
+            print("Overwriting Mineral column with manually recorded data")
+            composition_df.assign(Mineral=minerals,inplace=True)
+    return csv_name
+
+csv_name = add_to_df_or_not(composition_df,f)
+#+END_SRC
+
+#+RESULTS:
+
+The resulting file can be saved as a csv for easier inspection.
+
+#+BEGIN_SRC python :session py
+# Save the process composition dataframe as a csv file.
+composition_df.to_csv(csv_name + ".csv",index=False)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+This process can then be repeated for the other file:
+
+#+BEGIN_SRC python :session py
+# Construct filepath for second dataset.
+f = os.path.join(data_folder,"2024-04-17-v1.txt")
+# Isolate the tabular data from the raw data.
+df = extract_table(f)
+# Isolate the relevant columns from the tabular data.
+composition_df = clean_df(df)
+# Extra processing (which represents the automation of past manual work), which also returns a more descriptive filename for the second dataset.
+csv_name = add_to_df_or_not(composition_df,f)
+# Save the processed dataframe to csv.
+composition_df.to_csv(csv_name + ".csv",index=False)
+#+END_SRC
+
+#+RESULTS:
+: None
+* Mineral Phase Identification
+** Step-by-Step Example
+A simple example will be run for amphibole compositions (=silicates.csv=) to demonstrate the purpose of phase grouping as recorded in the =Mineral= column. The goal is to determine the variety of amphibole (assumed to all be the same) present in the samples analysed (with the help of Webmineral).
+*** Data Filtering
+The results for multiple different silicate phases are present in =silicates.csv=, with the amphiboles having the group name "amp". This phase is first filtered for, and then its compositional data summarized (i.e. summary statistics --- mean and standard deviation --- computed). Since oxygen was calculated for the silicate phases (under the assumption of typical oxides), it is ignored in the search.
+
+#+BEGIN_SRC python :session py
+df = pd.read_csv("silicates.csv")
+# Isolate columns containing the compositional data into an intermediate df.
+elems_df = df[[c for c in df.columns if len(c)<=2]]
+# Remove oxygen column
+elems_df.pop("O")
+# Provide a more descriptive alias for later use (doesn't get overwritten).
+silicates_df = elems_df
+# Create phase filter.
+phase_filter = df["Mineral"] == "amp"
+# Filter compositional dataframe.
+filtered_df = elems_df[phase_filter]
+
+def summarize_cols(df):
+    ''' Compute columnwise mean and standard deviation (both absolute and as a percentage of the mean) of a dataframe with columns containing only numerical data.
+
+    df | :required: | dataframe with just numerical data in columns
+
+    Returns: pd.DataFrame
+    '''
+    # Construct DataFrame containing summary statistics.
+    proc_df = pd.DataFrame({"Mean":df.mean(),
+                            "Stdev":df.std(),
+                            "Stdev /%":df.std()/df.mean() * 100}).T.round(4)
+    return proc_df
+
+proc_df = summarize_cols(filtered_df)
+
+proc_df
+#+END_SRC
+
+#+RESULTS:
+:                Na       Mg       Si       Al         P       Ti        K      Ca       Mn       Fe       Cr
+: Mean       0.1574  14.2721  26.9392   0.4175    0.0044   0.0199   0.0220  9.0388   0.0475   1.2057   0.0306
+: Stdev      0.0633   0.1259   0.1355   0.1300    0.0063   0.0109   0.0134  0.1223   0.0166   0.1615   0.0091
+: Stdev /%  40.1772   0.8819   0.5029  31.1497  141.9021  54.6899  60.7125  1.3532  34.9453  13.3964  29.7622
+
+Though the mean is of interest in identifying the mineral, the standard deviation can be used to estimate how representative the mean is of the dataset: a higher standard deviation implies a less representative mean, which could be due to the mean being small in this compostional data, or the presence of multiple mineral phases within the grouped data. In the case of the top 3 element means, the mean weight percent is usually quite high and so the latter is more likely. As such, care should be taken when assigning all grains in the dataset to the mineral found using the top 3 means. Whether this is a concern or not can be checked in the output of the following code block.
+
+#+BEGIN_SRC python :session py
+def isolate_top_three(proc_elem_df):
+    ''' Isolate the 3 columns with the largest "Means"
+
+    proc_elem_df | :required: | dataframe containing summary statistics for compositional data with a row called "Mean" containing columnwise means from multiple sites.
+
+    Returns: pd.DataFrame
+    '''
+    # Sort means into descending order.
+    proc_elem_df.sort_values("Mean",axis=1,ascending=False,inplace=True)
+    # Isolate columns with the top 3 means.
+    top_three = proc_elem_df.iloc[:,:3]
+    return top_three
+
+top_three = isolate_top_three(proc_df)
+
+top_three
+#+END_SRC
+
+#+RESULTS:
+:                Si       Mg      Ca
+: Mean      26.9392  14.2721  9.0388
+: Stdev      0.1355   0.1259  0.1223
+: Stdev /%   0.5029   0.8819  1.3532
+
+In this case, the standard deviations are quite small, so the phase grouping was likely successful (i.e. is unlikely to include more than one mineral phase).
+*** Webmineral Querying
+Though Webmineral doesn't provide a REST API, a database search can be performed by modifying parameters passed to the PHP endpoint: =http://webmineral.com/MySQL/mineral_chem.php=, which returns mineral matches in alphabetical order (apparently up to a maximum). As of July 2024, the returned results are also in a uniform format that can be parsed using regex. However, it's important to note that the format of these results may change in the future, and thus require the regex using in the following code to also be modified (i.e. this code may not work in the future). Since this web stuff isn't particularly relevant to the science, the specifics of each step will not be discussed in detail (though brief, explanatory comments will be present throughout the code), and the functionality will be wrapped inside a class for easy reusability later on.
+
+The key thing to know is that =WebmineralQuerier= is a class that's constructed with a composition in dictionary format (element : weight%) and provides the method =order_minerals_df=, which returns an ordered DataFrame of matching mineral compostions within some percentage tolerance.
+- The ordering is done using a summed fractional misfit approach, which uses $\sum_{elems} \frac{O-E}{E}$ ($elems$: elements, $O$: "observed" weight% in the mineral options returned from Webmineral, $E$: expected weight% from EPMA analysis) to determine the misfit.
+- If the tolerance is too high, then there will be more results than can be handled, and so the closest match may be outside of the returned results. As such, the tolerance should be set relatively low as such to return only a few results, but not too low such that there's only one result returned.
+
+#+BEGIN_SRC python :session py
+import requests as req
+import numpy as np
+
+def sum_fractional_misfit(observed,expected):
+    ''' Compute row-wise summed fractional misfit values.
+
+    observed | :required: | 2D numpy array containing "observations" (element wt% of the different mineral options returned from Webmineral)
+    expected | :required: | 1D numpy array containing the expectation (expected element wt% from EPMA analysis)
+
+    Returns: np.array
+    '''
+    return np.sum(abs(observed - expected)/expected,axis=1)
+
+def findall_tag_contents(tag,s):
+    ''' Find all tags (+contents) of a certain type/name in a string.
+    tag | :required: | HTML/XML tag type/name e.g. "i" for <i>
+
+    returns: list
+    '''
+    return re.findall("<%s[\s\S]*?</%s>" % (tag,tag),s)
+
+class WebmineralQuerier:
+    def __init__(self,compositional_target):
+        '''
+        compostional_target | :required: | EPMA observed composition that's being searched for in dictionary format (element symbol:weight% e.g. {"Si":20, ... })
+        '''
+        # Construct parameters string for the composition search query.
+        self.elem_params = "&".join(["sym%u=%s&percent%u=%.2f" % (i+1,elem[0],i+1,elem[1])
+                                     for i,elem in enumerate(list(compositional_target.items()))])
+        self.target = compositional_target
+        return
+
+    def _get_table(self,tolerance):
+        ''' Get the match for the (html) table of minerals returned from the Webmineral query.
+        tolerance | :required: | the percentage tolerance around the inputted composition.
+
+        Returns: re.Match
+        '''
+        print("Querying Webmineral with tolerance %.2f" % tolerance)
+        # Construct query url.
+        query_url = "http://webmineral.com/MySQL/mineral_chem.php?%s&minmax=%s&submit=Submit+Query" % (self.elem_params,tolerance)
+        # Issue GET request to query URL.
+        response = req.get(query_url)
+        # Find the table of results in the contents of the response.
+        table_of_matches = re.search("""Listing of [0-9]*? Records[\s\S]*?</table>""",response.text)
+        # Return the match object for this table.
+        return table_of_matches
+
+    def get_minerals_df(self,tolerance):
+        ''' Get the response table (match) and then parse into a dataframe.
+        tolerance | :required: | the percentage tolerance around the inputted composition.
+
+        Returns: pd.DataFrame or None
+        '''
+        # Get the match object for the html response table.
+        matches = self._get_table(tolerance)
+        # Return None if no match was found.
+        if not matches:
+            return None
+        # Extract rows from html table.
+        rows = findall_tag_contents("tr",matches.group(0))
+        # Isolate the header row and extract column names.
+        header_row = rows[0]
+        col_names = [re.sub("<.*?>|%","",s).strip() for s in findall_tag_contents("td",rows[0])]
+        # Isolate the data rows and extra data.
+        data_rows = rows[1:]
+        data = [[re.sub("<.*?>|&nbsp;","",s).strip() for s in findall_tag_contents("td",row)] for row in data_rows]
+        # Construct dataframe.
+        df = pd.DataFrame(data,columns=col_names)
+        # Remove empty columns (i.e. columns without an element name).
+        df.drop("",axis=1,inplace=True)
+        return df
+
+    def order_minerals_df(self,tolerance):
+        ''' Order minerals in the response table by similarity to input composition.
+        tolerance | :required: | the percentage tolerance around the inputted composition.
+
+        Returns: pd.DataFrame
+        '''
+        # Get (alphabetically ordered) dataframe of minerals.
+        df = self.get_minerals_df(tolerance)
+        # Return None if no table was found.
+        if df is None:
+            return
+        # Isolate the element column names (i.e. not the first column, which is "Mineral").
+        elements = df.columns[1:]
+        # Create array of "expected" (EPMA observed) element concentrations in the same order as the data in the response table.
+        target_arr = np.array([self.target[e] for e in elements if e])
+        # Convert concentration data in the response data to a suitable numpy array.
+        compositions = df.to_numpy()[:,1:].astype(float)
+        # Determine the summed fractional misfit for each mineral (row) in the response table and store this value in a new column.
+        df["SFM"] = sum_fractional_misfit(compositions,target_arr)
+        # Sort the rows/minerals by their misfit in ascending order.
+        df.sort_values("SFM",inplace=True)
+        # Set the "Mineral" column as the index and remove the redudant data column after doing so.
+        df.index = df["Mineral"]
+        df.drop("Mineral",axis=1,inplace=True)
+        return df
+#+END_SRC
+
+#+RESULTS:
+
+This is applied to the amphibole composition with a tolerance of 30%.
+
+#+BEGIN_SRC python :session py
+# Construct composition dictionary.
+composition = dict(top_three.loc["Mean"].items())
+# Query Webmineral with 30% tolerance.
+WMQ = WebmineralQuerier(composition)
+matches_df = WMQ.order_minerals_df(30)
+
+matches_df
+#+END_SRC
+
+#+RESULTS:
+:                                Si     Mg     Ca       SFM
+: Mineral
+: Tremolite                   27.66  14.96   9.87  0.166915
+: Edenite                     23.57  14.57   9.61  0.209134
+: Fluoro-edenite              24.83  13.65   7.66  0.274426
+: Magnesiohornblende          23.94  11.84   9.76  0.361531
+: Magnesiohastingsite         19.49  11.24   9.27  0.514547
+: Kaersutite                  19.31  11.14   9.18  0.518278
+: Fluoro-magnesiohastingsite  19.10  11.31  10.04  0.609308
+
+The best match is tremolite, which /is/ an amphibole. The second best match is Edenite, another amphibole.
+** Application to Other Phases
+*** Clinochlore?
+Another silicate which was separated into late- and early groups (early being grains enclosed by magnetite, and late being all other grains). However, these were merged into a single group for mineral phase determination.
+
+#+BEGIN_SRC python :session py
+# Create phase filter.
+phase_filter = (df["Mineral"] == "late-clc") | (df["Mineral"] == "early-clc")
+# Filter compositional dataframe.
+filtered_df = silicates_df[phase_filter]
+# Compute mean and standard deviation.
+proc_df = summarize_cols(filtered_df)
+# Isolate top three elements.
+top_three = isolate_top_three(proc_df)
+
+top_three
+#+END_SRC
+
+#+RESULTS:
+:                Mg       Si       Al
+: Mean      20.0241  15.0555   7.5729
+: Stdev      0.2830   0.8948   1.7001
+: Stdev /%   1.4131   5.9431  22.4495
+
+The standard deviations for Mg and Si seem relatively low, but for Al seems high. To test whether this could be a sign of early vs late clinochlore being different phases, summary statistics are computed for each group individually.
+
+#+BEGIN_SRC python :session py :results output
+# Isolate data for grains belonging to the late clinochlore group.
+late_clc_df = elems_df[df["Mineral"] == "late-clc"]
+# State the group and number of datapoints contained.
+print("Late clc; N = %u" % len(late_clc_df))
+# Compute summary statistics and isolate the top three elemental concentrations.
+print(isolate_top_three(summarize_cols(late_clc_df)))
+
+# Isolate data for grains belonging to the early clinochlore group.
+early_clc_df = elems_df[df["Mineral"] == "early-clc"]
+# State the group and number of datapoints contained.
+print("Early clc; N = %u" % len(early_clc_df))
+# Compute summary statistics and isolate the top three elemental concentrations.
+print(isolate_top_three(summarize_cols(early_clc_df)))
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Late clc; N = 18
+               Mg       Si      Al
+Mean      19.9760  14.8820  7.7834
+Stdev      0.1908   0.1398  0.3435
+Stdev /%   0.9552   0.9393  4.4134
+Early clc; N = 5
+               Mg       Si       Al
+Mean      20.1974  15.6803   6.8148
+Stdev      0.4875   1.9227   3.8049
+Stdev /%   2.4135  12.2620  55.8321
+#+end_example
+
+It seems the large overall standard deviation from the merged clinochlore groups is due to a very large standard deviation in the early clinochlore group (perhaps a result of the low number of datapoints). As such, merging the clinochlore groups isn't necessarily an invalid action. For simplicity, the top three elements from the merged dataset will be used in querying.
+
+#+BEGIN_SRC python :session py
+# Construct composition dictionary.
+composition = dict(top_three.loc["Mean"].items())
+# Query Webmineral with 30% tolerance.
+WMQ = WebmineralQuerier(composition)
+matches_df = WMQ.order_minerals_df(30)
+
+matches_df
+#+END_SRC
+
+#+RESULTS:
+:                 Mg     Si    Al       SFM
+: Mineral
+: Glagolevite  22.77  13.84  7.15  0.273708
+: Clinochlore  15.31  14.16  9.07  0.492593
+: Biotite      14.02  19.44  6.22  0.769716
+
+Though Glagolevite is the best match, it is also much more Na rich than the data (based on additional searching). Clinochlore, the second best match, is Na-poor but appears to be a worse match due to the observed compositions having a higher Mg/Fe ratio than the expected composition. As such the observed phase is likely a Mg-rich clinochlore.
+*** Magnetite?
+Magnetite data is stored in a separate file, where the =Mineral= column refers to the mineral phase with which the analysed magnetite is associated with/enclosed by. In the magnetite analysis, oxygen was explicitly measured, and so will not be removed in preprocessing. For simplicity, the different magnetite groups will all be merged.
+
+#+BEGIN_SRC python :session py
+# Load EPMA data for magnetites.
+df = pd.read_csv("magnetites.csv")
+# Isolate columns containing the compositional data into an intermediate df.
+magnetites_df = elems_df = df[[c for c in df.columns if len(c)<=2]]
+# Compute summary statistics.
+proc_df = summarize_cols(elems_df)
+# Isolate top three elements.
+top_three = isolate_top_three(proc_df)
+
+top_three
+#+END_SRC
+
+#+RESULTS:
+:                Fe        O       Cr
+: Mean      60.2721  25.5911   5.8193
+: Stdev     10.5878   3.3668   3.0659
+: Stdev /%  17.5667  13.1560  52.6855
+
+The standard deviations for Fe and O are significant but not huge, but is quite large for Cr. However, this could be more a result of the mean being quite small rather than there being multiple groups. These three elements can thus be reasonably used in the search.
+
+#+BEGIN_SRC python :session py
+# Construct composition dictionary.
+composition = dict(top_three.loc["Mean"].items())
+# Query Webmineral with 30% tolerance.
+WMQ = WebmineralQuerier(composition)
+matches_df = WMQ.order_minerals_df(30)
+#+END_SRC
+
+#+RESULTS:
+
+No matches are found at 30% tolerance. Trying 50% tolerance:
+
+#+BEGIN_SRC python :session py
+# Query Webmineral with 50% tolerance.
+matches_df = WMQ.order_minerals_df(50)
+#+END_SRC
+
+#+RESULTS:
+
+There are still no matches found. One way to get results would be to remove the Cr constraint --- an action supported by the high standard deviation/potential issues with the Cr mean.
+
+#+BEGIN_SRC python :session py
+# Construct composition dictionary.
+composition = dict(top_three.loc["Mean"].items())
+# Remove Cr.
+composition.pop("Cr")
+# Query Webmineral with 30% tolerance.
+WMQ = WebmineralQuerier(composition)
+matches_df = WMQ.order_minerals_df(25)
+
+matches_df
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+                  Fe      O       SFM
+Mineral
+Trevorite      55.16  27.60  0.163317
+Brunogeierite  51.47  26.22  0.170614
+Lindqvistite   46.85  24.49  0.265718
+Hibbingite     45.93  26.32  0.266438
+Magnetite      72.36  27.64  0.280618
+Vonsenite      64.85  30.96  0.285749
+Ulvospinel     49.96  28.63  0.289841
+Batiferrite    49.01  28.38  0.295834
+Cuprospinel    47.58  27.96  0.303147
+Fayalite       54.81  31.41  0.318004
+Hematite       69.94  30.06  0.335031
+Maghemite      69.94  30.06  0.335031
+#+end_example
+
+Trevorite is the best match but its high Ni content doesn't match the data. A number of other rare minerals seem to be better matches than magnetite. Something that's interesting with the observed composition is the high Cr, which could suggest this is not a typical magnetite, but rather a Cr-rich variety (that's not sufficiently different to be considered a separate mineral phase).
+* Sub-phase Group Comparisons
+** Similarities and Differences in the Compositions of Late vs Early Clinochlores
+With the magnetites enclosing early clinochlore grains being unusually rich in Cr, investigating differences in Cr content between the two clinochlore groups is useful. Data is loaded from =silicates.csv= and Oxygen (derived rather than measured) is removed as similar to above.
+*** Cr
+Such a comparison can be performed using boxplots (from =matplotlib=)
+
+#+BEGIN_SRC python :session py
+import matplotlib.pyplot as plt
+# Initialize figure.
+plt.figure(figsize=(2,4.8),constrained_layout=True)
+# Add boxplots of the early clinochlore group and late clinochlore group.
+plt.boxplot([early_clc_df["Cr"],late_clc_df["Cr"]])
+# Rename xticks to E (for Early) and L (for Late).
+plt.gca().set_xticks([1,2],["E","L"])
+plt.ylabel("Cr wt%")
+plt.title("Cr")
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+The early (E) clinochlore grains, which are enclosed by magnetites, appear to be less enriched in Cr compared to the late (L) clinochlore grains. This could be a result of the early clinochlore forming under Cr-poor conditions, and then the late clinochlore and later magnetite forming under more Cr-rich conditions.
+*** Mg and Fe
+An important ratio in chlorite group minerals is the amount of Mg and Fe (which can distinguish between different mineral species).
+
+In addition to comparing the distribution of Mg and Fe concentrations individually, it's also useful to compare their ratios.
+
+#+BEGIN_SRC python :session py
+# Initialize figure with 3 subplots.
+fig,axs = plt.subplots(1,3,constrained_layout=True)
+# Plot comparison boxplots of Fe concentration in the first subplot.
+axs[0].boxplot([early_clc_df["Fe"],late_clc_df["Fe"]])
+axs[0].set_ylabel("Fe wt%")
+# Plot comparison boxplots of Mg concentration in the second subplot.
+axs[1].boxplot([early_clc_df["Mg"],late_clc_df["Mg"]])
+axs[1].set_ylabel("Mg wt%")
+# Plot comparison boxplots of Mg/Fe ratio in the third subplot.
+axs[2].boxplot([early_clc_df["Mg"]/early_clc_df["Fe"],late_clc_df["Mg"]/late_clc_df["Fe"]])
+axs[2].set_ylabel("Mg/Fe (wt%/wt%)")
+# Rename xticks to E (for Early) and L (for Late) for all subplots axes.
+[ax.set_xticks([1,2],["E","L"]) for ax in axs]
+fig.suptitle("(Fe,Mg) Parameter Distribution Comparisons")
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+There’s little difference between the Fe wt%, Mg wt%, and Mg/Fe (wt%) distributions.
