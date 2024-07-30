@@ -10,6 +10,8 @@ Though Webmineral's composition querying is limited to 3 elements at most, the 3
 * Raw Data Processing
 Alongside compositional data in a tab-separated table format, the raw data files also contains metadata for the EPMA analysis. In this case, the two files of interest are =2024-04-16-v1.txt= (magnetites) and =2024-04-17-v1.txt= (silicates).
 
+Units are wt%.
+
 #+BEGIN_SRC python :session py
 import os
 import pandas as pd

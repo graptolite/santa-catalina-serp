@@ -1,0 +1,188 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; org-confirm-babel-evaluate: nil; -*-
+# NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
+# NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
+
+#+TITLE: XRF Data Analysis and PEM Modelling
+* Introduction
+XRF (+titration) compositional data was collected by Peter Lindquist. Major element oxide and iron oxidation state data is contained within this data.
+* Reading the Data
+The raw data is stored in a .xslx Excel file, which is not easy to process in Python as a .csv file or Pandas DataFrame. As such, parsing the data into an easier format is the first step.
+- *Note: =openpyxl= (required for .xslx parsing) must be installed for this notebook to work*.
+
+
+Units are wt% for the oxides, and ppm for the trace elements.
+
+With there being 5 specimens, whose data is arranged columnwise, and an extra column containing row names, everything after the 6th column can be ignored. The first column contains the component being analysed, which is moved out of the dataframe structure in preparation for a transpose (such that each sample is represented by one row of data).
+
+#+BEGIN_SRC python :session py
+import pandas as pd
+import numpy as np
+
+# Read raw data.
+# There's an empty row in the raw data so set header row to second row (index: 1).
+df = pd.read_excel("../DATASETS/XRF/Serp-P.Lindquist. U.Wash. 11-2023.xlsx",header=1)
+
+# Ignore columns after the 6th.
+df = df.iloc[:,:6]
+
+# Extract component names.
+components = list(df.iloc[:,0])
+# Remove component names column from dataframe.
+df.drop(df.columns[0],axis=1,inplace=True)
+
+# Transpose df and add component names back in as column headers.
+df = df.T
+df.columns = components
+#+END_SRC
+
+#+RESULTS:
+* Processing the Data for PEM
+** Isolating Relevant Columns
+For PEM, only certain element columns are of interest. Fe2O3T from the XRF analysis will be ignored in favor of FeO and Fe2O3 from the titration analysis. This also means the total from this raw data cannot be used. Water will be assumed to be the only volatile (LOI) for simplicity. A dehyrated total is also computed.
+
+#+BEGIN_SRC python :session py
+# State columns of interest.
+columns_for_PEM = [c for c in df.columns if (len(c)>2) and (c not in ["Total","Fe2O3T"])]
+# Extract columns of interest.
+PEM_df = df[columns_for_PEM]
+# Rename LOI column to H2O column.
+PEM_df = PEM_df.rename(columns={"LOI":"H2O"})
+
+# Compute dehydrated total.
+dehyd_tot = PEM_df.drop("H2O",axis=1).sum(axis=1)
+PEM_df["dehyd_tot"] = dehyd_tot
+#+END_SRC
+
+#+RESULTS:
+** Normalization with Observed H2O (LOI)
+Since the XRF analysis looked at bulk oxide weight% after devolatilization (with LOI being recorded prior), =dehyd_tot= is around 100, with =tot= being > 100. Since LOI *is* being considered in the PEM compositions, the data needs to be renormalized such that =tot= is 100. However, due to the later measurement of the bulk oxide weight%, the columns making up =dehyd_tot= must be normalized to 100 - H2O. Since the data's =dehyd_tot= does not exactly sum to 100, the operation is performed on oxide weights expressed as fractions of the data's =dehyd_tot=.
+- Therefore: normed oxide = (observed oxide / observed dehyd tot) $\times$ normed dehyd tot, where normed dehyd tot is (100 - H2O). Rearranging, this produces: normed oxide = observed oxide $\times$ (normed dehyd tot / observed dehyd tot).
+- Strictly speaking, FeO and Fe2O3 (from titration) were not found in the same run (XRF) as the other major element oxides, so this is all a slight oversimplification.
+
+#+BEGIN_SRC python :session py
+# Store dehyd tot from the data outside of df.
+obs_dehyd_tot = PEM_df["dehyd_tot"]
+# Store H2O outside of df.
+H2O = PEM_df["H2O"]
+# Compute normed dehyd tot
+norm_dehyd_tot = 100 - H2O
+
+# Apply the normalizing factor to all columns in the table.
+PEM_df_hyd = PEM_df.mul((norm_dehyd_tot/obs_dehyd_tot),axis=0)
+
+# Put correct H2O values back in.
+PEM_df_hyd = PEM_df_hyd.assign(H2O=H2O,tot=PEM_df["dehyd_tot"]+H2O)
+
+PEM_df_hyd
+#+END_SRC
+
+#+RESULTS:
+:               SiO2      TiO2     Al2O3  ...     Fe2O3 dehyd_tot         tot
+: 23C-06B  40.009632  0.033558   1.40105  ...  6.975197     83.84  116.094177
+: 23C-06C  45.221885  0.008676  0.728825  ...  6.785818     86.41  113.180922
+: 23C-07A  38.964058  0.043236  1.781313  ...  7.831116     86.01  113.456297
+: 23C-07B  39.408441  0.025718  1.431631  ...  7.341818     85.25  114.194241
+: 23C-M02  39.915478  0.008533  1.459074  ...  7.384313     84.92  114.604241
+:
+: [5 rows x 14 columns]
+
+The totals now all sum to 100 as expected, and the oxides have been proportionally scaled.
+** Normalization with Mantle H2O
+A dehydrated/mantle composition can also be computed, with initial (mantle) water content set to 0.004 wt% \citep{Azevedo2021}. This can be done by repeating the previous but with H2O all set to 0.004.
+
+#+BEGIN_SRC python :session py
+# Store dehyd tot from the data outside of df.
+obs_dehyd_tot = PEM_df["dehyd_tot"]
+# Set H2O to 0.004.
+H2O = 0.004
+# Compute normed dehyd tot
+norm_dehyd_tot = 100 - H2O
+
+# Apply the normalizing factor to all columns in the table.
+PEM_df_dehyd = PEM_df.mul((norm_dehyd_tot/obs_dehyd_tot),axis=0)
+
+# Put correct H2O values back in.
+PEM_df_dehyd = PEM_df_dehyd.assign(H2O=H2O,tot=PEM_df["dehyd_tot"]+H2O)
+
+PEM_df_dehyd
+#+END_SRC
+
+#+RESULTS:
+:               SiO2      TiO2     Al2O3  ...     Fe2O3 dehyd_tot        tot
+: 23C-06B  47.719503  0.040025  1.671033  ...   8.31932    99.996  99.938177
+: 23C-06C  52.331994  0.010041  0.843417  ...  7.852733    99.996  99.594922
+: 23C-07A  45.299965  0.050266   2.07097  ...  9.104526    99.996  99.470297
+: 23C-07B  46.225061  0.030166  1.679266  ...  8.611759    99.996  99.448241
+: 23C-M02  47.001744  0.010047  1.718106  ...  8.695263    99.996  99.528241
+:
+: [5 rows x 14 columns]
+** Constructing PEM Composition Strings
+PEM composition strings for Theriak-Domino (T-D) are in the format X(Nx)Y(Ny) where X and Y are elements and Nx and Ny are their molar abundances. As such, converting from XRF data to T-D composition strings involves separating oxides into their constituent elements and then converting from mass (weight%) to moles (as molar ratios). The method is encoded in the spreadsheet =Composition-Converter-Palin.xlsx= (by Richard Palin), and translated to Python in the class =CompositionProcessor= in =composition_processor.py=. The specifics of the code are not relevant to this notebook, but a brief outline is provided for context (for more detail, see =composition_processor.py=, which contains explanatory comments). The general steps of this method include, where the moles are relative to each other rather than being absolute values (since the composition is in the form of percentages):
+1. Convert oxide weight to oxide moles through dividing by Mr.
+2. Convert all Fe2O3 into FeO + O (such that it's nominally stored in FeO, but with additional O stored separately that oxidizes the necessary fraction of FeO to Fe2O3).
+3. If an apatite correction is to be applied (i.e. remove apatite contributions to calcium oxide), then remove a number of CaO moles scaled to the amount of P2O5 observed. P2O5 can also be ignored by passing another option.
+4. (Not absolutely necessary but useful for inspection of oxide amounts) normalize the total number of oxide moles to 100 (such that the moles of each oxide effectively represents a percentage).
+5. Find the number of non-oxygen element atoms and oxygen atoms per oxide molecule and then multiply by the /oxide/ moles to get the moles of each /element/ (including oxygen after summing contributions from all oxides).
+6. Convert this data into a suitable format for T-D input.
+
+
+An brief example of relevant usage is as follows:
+#+BEGIN_SRC python :session py :results output
+from composition_processor import CompositionProcessor
+
+# Access the (dehydrated) composition of the first sample in the database after removing the totals.
+composition = dict(PEM_df_dehyd.iloc[1,:].drop(["tot","dehyd_tot"],axis=0))
+
+print(composition)
+
+td_formula = CompositionProcessor().theriak_domino_formula(composition)
+
+print(td_formula)
+#+END_SRC
+
+#+RESULTS:
+: {'SiO2': 52.33199408408726, 'TiO2': 0.010040674229487196, 'Al2O3': 0.8434166352769245, 'MnO': 0.15061011344230793, 'MgO': 37.86338251939622, 'CaO': 0.08032539383589757, 'Na2O': 0.040162696917948784, 'K2O': 0.010040674229487196, 'P2O5': 0.010040674229487196, 'H2O': 0.004, 'FeO': 0.8032539383589757, 'Fe2O3': 7.852732595995978}
+: SI(43.95)AL(0.83)CA(0.06)MG(47.40)FE(5.53)K(0.01)NA(0.07)TI(0.01)MN(0.11)H(0.02)O(144.79)
+
+
+* PEM P-T-x Paths
+The P-T-x path was determined (with some degree of interpretation and simplification) from the literature \citep{Grove1995,Platt2024}:
+- Cooling Path: 14 kbar, 850 deg C to 14 kbar, 700 deg C
+- Serpentinisation and Exhumation Path: 14 kbar, 700 deg C to 4 kbar, 200 deg C
+- Final Exhumation Path: 4 kbar, 200 deg C to 1 kbar, 100 deg C
+
+#+BEGIN_SRC python :session py
+import matplotlib.pyplot as plt
+
+# Define the paths.
+paths = {"cooling":([850,700],[14000,14000]),
+         "serpentinisation":([700,200],[14000,4000]),
+         "exhumation":([200,100],[4000,1000])}
+
+plt.figure()
+# Plot the paths.
+for path in paths:
+    plt.plot(*paths[path],linewidth=1.5,label=path)
+
+# Set viewport limits.
+plt.xlim(0,850)
+plt.ylim(14100,0)
+# Set axes labels.
+plt.xlabel(r"Temperature /$^{\circ}\text{C}$")
+plt.ylabel("Pressure /bar")
+
+plt.legend()
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+* Compositional Corrections
+MnO can be removed from the compositions as it is not relevant for PEM. As a check of the compositions' suitability for PEM, the protolith mineralogy can be checked against expected mantle protolith mineralogy. This protolith mineralogy can be found by running =theriak.exe= for each composition at the start of the serpentinisation path.
+
+#+BEGIN_SRC python :session py
+#+END_SRC
+
+Preliminary PEM modelling with the compositions as-is returned unexpected results in the protolith (i.e. mineralogy at the end of the cooling path/start of serpentinisation path).
+
+The issue of treating the observed composition as the protolith composition is further highlighted when the composition is plotted onto a Fo-Opx-Cpx ternary diagram.
