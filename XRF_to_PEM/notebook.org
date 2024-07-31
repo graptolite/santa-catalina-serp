@@ -116,6 +116,7 @@ PEM_df_dehyd
 : 23C-M02  47.001744  0.010047  1.718106  ...  8.695263    99.996  99.528241
 :
 : [5 rows x 14 columns]
+
 ** Constructing PEM Composition Strings
 PEM composition strings for Theriak-Domino (T-D) are in the format X(Nx)Y(Ny) where X and Y are elements and Nx and Ny are their molar abundances. As such, converting from XRF data to T-D composition strings involves separating oxides into their constituent elements and then converting from mass (weight%) to moles (as molar ratios). The method is encoded in the spreadsheet =Composition-Converter-Palin.xlsx= (by Richard Palin), and translated to Python in the class =CompositionProcessor= in =composition_processor.py=. The specifics of the code are not relevant to this notebook, but a brief outline is provided for context (for more detail, see =composition_processor.py=, which contains explanatory comments). The general steps of this method include, where the moles are relative to each other rather than being absolute values (since the composition is in the form of percentages):
 1. Convert oxide weight to oxide moles through dividing by Mr.
@@ -144,12 +145,14 @@ print(td_formula)
 : {'SiO2': 52.33199408408726, 'TiO2': 0.010040674229487196, 'Al2O3': 0.8434166352769245, 'MnO': 0.15061011344230793, 'MgO': 37.86338251939622, 'CaO': 0.08032539383589757, 'Na2O': 0.040162696917948784, 'K2O': 0.010040674229487196, 'P2O5': 0.010040674229487196, 'H2O': 0.004, 'FeO': 0.8032539383589757, 'Fe2O3': 7.852732595995978}
 : SI(43.95)AL(0.83)CA(0.06)MG(47.40)FE(5.53)K(0.01)NA(0.07)TI(0.01)MN(0.11)H(0.02)O(144.79)
 
-
 * PEM P-T-x Paths
 The P-T-x path was determined (with some degree of interpretation and simplification) from the literature \citep{Grove1995,Platt2024}:
 - Cooling Path: 14 kbar, 850 deg C to 14 kbar, 700 deg C
+  - Composition: dehydrated/mantle water content
 - Serpentinisation and Exhumation Path: 14 kbar, 700 deg C to 4 kbar, 200 deg C
+  - Composition: hydrating (rapid increase to near observed water content at the start, and then slower increase to observed water content later in this path)
 - Final Exhumation Path: 4 kbar, 200 deg C to 1 kbar, 100 deg C
+  - Composition: hydrated/observed water content
 
 #+BEGIN_SRC python :session py
 import matplotlib.pyplot as plt
@@ -172,17 +175,352 @@ plt.xlabel(r"Temperature /$^{\circ}\text{C}$")
 plt.ylabel("Pressure /bar")
 
 plt.legend()
+# plt.show()
+#+END_SRC
+
+#+RESULTS:
+: Legend
+
+* PEM Execution
+The Python code used to interface with =theriak.exe=, and basic plotting methods for its output are not particularly relevant for the purposes of this notebook, and so are stored in the separate file =theriak_api.py=. This commented code file can be inspected in case of interest.
+
+The following code imports the functions and classes from that file into this notebook session, where the purpse of each function/class method call will be clarified with comments.
+
+#+BEGIN_SRC python :session py
+from theriak_api import TheriakAPI,group_cols,TheriakOutput
+
+# Imported:
+# TheriakAPI (class) - handling the input for theriak.exe, including the construction of command/directive files.
+# group_cols (function) - groups columns in a dataframe together into broader classifications (by default, this is applied to phases e.g. grouping fayalite and forsterite into olivine).
+# TheriakOutput (class) - visualize the parsed output (dataframe) from theriak.exe using various plotting methods.
+#+END_SRC
+
+#+RESULTS:
+
+* Compositional Corrections
+MnO can be removed from the compositions as it is not relevant for PEM. As a check of the compositions' suitability for PEM, the protolith mineralogy can be checked against expected mantle protolith mineralogy.
+** Protolith Mineralogy with Compositions As-Is
+This protolith mineralogy can be found by running =theriak.exe= for each composition (dehydrated/mantle composition) at the start of the serpentinisation path.
+
+#+BEGIN_SRC python :session py
+import shutil
+import os
+
+force_theriak_rerun = False
+
+def find_protoliths(compositions_df,table_file_prepend=""):
+    # Extract the protolith P-T from serpentinisation path.
+    PT = np.array(paths["serpentinisation"])[:,:-1]
+    # Initiate theriak input control class with the relevant folder path and file names.
+    theriak_api = TheriakAPI(theriak_dir="./theriak",
+                             ptx_commandfile="path.txt",
+                             directive_file="path.directive")
+    # Create theriak directive file. This only needs to be run once in this case (thermodynamic database doesn't change).
+    theriak_api.create_directive()
+    # Get list of sample names.
+    samples = compositions_df.index
+    # Initialize storage for outputted phase dataframes.
+    dfs = []
+    # Iterate through samples.
+    for sample in samples:
+        # Construct T-D formula for the active sample.
+        td_formula = CompositionProcessor().theriak_domino_formula(compositions_df.loc[sample])
+        print(sample,td_formula)
+        # Make sure there are no old PTX path commands.
+        theriak_api.clear_PTX_commands()
+        # Provide theriak command to compute the stable mineral assemblage for the composition td_formula at the singular P-T conditions of PT
+        theriak_api.add_PTX_command(td_formula,*PT.T[0][::-1],1)
+        # Save the command to nonvolatile storage as a theriak path file.
+        theriak_api.save_PTX_commandfile()
+        # Run theriak.exe on the existing commands and retrieve the output table.
+        df = theriak_api.execute_theriak()
+        # Move output table to a more permanent location.
+        shutil.move(os.path.join(theriak_api.theriak_dir,"loop_table"),
+                    f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table")
+        # Store df.
+        dfs.append(df)
+    return dfs
+
+# Clean composition dataframe (notably removing MnO).
+dehyd_compositions_df = PEM_df_dehyd.drop(["tot","dehyd_tot","MnO"],axis=1)
+
+samples = dehyd_compositions_df.index
+table_file_prepend = "protoliths-unmodified"
+
+if force_theriak_rerun:
+    dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
+else:
+    theriak_api = TheriakAPI()
+    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+#+END_SRC
+
+#+RESULTS:
+
+To check against the expected mantle mineralogy, the phases must first be grouped to get a volume fraction of clinopyroxene, orthopyroxene and olivine.
+
+#+BEGIN_SRC python :session py
+def extract_umafic_protoliths(dfs):
+    protoliths = []
+    for df in dfs:
+        theriak_output = TheriakOutput(df)
+        vol_df = theriak_output.extract_volumes()
+        protolith = group_cols(vol_df).iloc[0]
+        required = ["Ol","Opx","Cpx"]
+        protolith_umafic = np.array([(protolith[phase] if phase in protolith else 0) for phase in required])
+        protoliths.append(protolith_umafic/protolith_umafic.sum())
+    return protoliths
+
+protoliths = extract_umafic_protoliths(dfs)
+#+END_SRC
+
+#+RESULTS:
+
+These [cpx,opx,ol] points can then be plotted on a ternary and compared against the expected range for mantle rocks \citep{Neumann2004}.
+
+#+BEGIN_SRC python :session py
+import mpltern
+import json
+
+def plot_umafic_ternary_base(ax):
+    # Dunite
+    ax.plot([0.9,0.9],[0.1,0],[0,0.1],color="grey")
+    # Lherzolite
+    ax.plot([0.4,0.4],[0.6,0],[0,0.6],color="grey")
+    # Ol Websterite
+    ax.plot([0.05,0.05],[0.85,0.05],[0.05,0.85],color="grey")
+    # Harzburgite
+    ax.plot([0.85,0.05],[0.05,0.85],[0.05,0.05],color="grey")
+    # Wherlite
+    ax.plot([0.85,0.05],[0.05,0.05],[0.05,0.85],color="grey")
+    # Cpxite
+    ax.plot([0.1,0],[0,0.1],[0.9,0.9],color="grey")
+    # Opxite
+    ax.plot([0.1,0],[0.9,0.9],[0,0.1],color="grey")
+    # Vertex labels
+    ax.set_tlabel("Ol")
+    ax.set_llabel("OPX")
+    ax.set_rlabel("CPX")
+    return
+
+def plot_umafic_ternary(compositions):
+    ax = plt.subplot(projection="ternary")
+    plot_umafic_ternary_base(ax)
+    with open("./local_data/Neumann2004_expected_mantle.json") as infile:
+        NA_MOR = json.load(infile)
+    ax.fill(*np.array(NA_MOR).T,fc="pink",alpha=0.8,zorder=-1,label="Expected range")
+    ax.text(*[2,1,1],"Lherzolite",ha="center",va="center")
+    ax.text(*[28,1,1],"Dunite",ha="center",va="center")
+    ax.text(*[2,1.5,0.1],"Harzburgite",ha="center",va="center",rotation=60)
+
+    compositions = np.array(compositions)
+    Ol = compositions[:,0]
+    OPx = compositions[:,1]
+    CPx = compositions[:,2]
+    for i,P in enumerate(compositions):
+        ax.plot(*P,label=samples[i],marker="*",markersize=10)
+    ax.legend()
+    return ax
+
+plt.figure()
+plot_umafic_ternary(protoliths)
+# plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+Preliminary PEM modelling with the compositions as-is returned unexpected results in the ultramafic/mantle protolith.
+
+Further investigation (e.g. of sample 23C-06B) also reveals the presence of unexpected phases in the mantle, namely haematite (instead of magnetite).
+
+#+BEGIN_SRC python :session py :results output
+i = 0
+print(samples[i])
+vols = group_cols(TheriakOutput(dfs[i]).extract_volumes())
+print(vols)
+#+END_SRC
+
+#+RESULTS:
+: 23C-06B
+:          Cpx        Opx      Mica        Hem         Ol
+: 0  12.034895  900.72897  1.572977  69.657255  526.96759
+
+This suggests that the observed (iron) composition is likely more oxidized than the protolith composition. \cite{Canil1994} suggests that mantle Fe2O3 ranges from 0.1 to 0.4 wt%, which is used to correct the observed compositions for the composition along the mantle cooling path. However, implementing this mantle Fe oxidation constraint is not as simple as setting the weight% of Fe2O3 to 0.1 and then adjusting FeO wt% to compensate to ensure a sum to 100, as that would change the (relative) molar total of Fe atoms in addition to changing the oxidation state. Nor would it be possible to set the weight% of Fe2O3 to 0.1, then compute the weight% of FeO from (relative) molar Fe as that may result in the wt% of all components not summing to 100% (resulting the Fe2O3 wt% being changed post-normalization). A more robust way of expressing oxidation than wt% of an individual oxide component is through the use of $Fe^{3+}/Fe_{tot}$ fraction, $f_{Fe3}$, which permits weight% to vary without being affected by initial weight% values.
+** Iron Correction
+As such, there should exist a unique value of $f_{Fe3}$ for each sample which results in the wt% of Fe2O3 being 0.1 wt%. "Analytical" method to compute Fe2O3 wt% from a prescribed $f_{Fe3}$:
+1. For the composition of interest, compute (relative) moles from wt% (moles = wt%/Mr).
+2. Compute total moles of Fe (sum of moles of Fe3+ = 2 * moles of Fe2O3 and Fe2+ = moles of FeO).
+3. Find the necessary moles of Fe3+ such that Fe3+/Fe_{tot}=f_{Fe3} (by rearranging for Fe3+).
+4. Find the necessary moles of Fe2+ such that Fe3+ + Fe2+ = Fe_{tot} (i.e. no change in the amount of Fe relative to the rest of the composition).
+5. Compute corresponding (new) moles of Fe2O3 and FeO (moles of Fe2O3 = moles of Fe3+ / 2; moles of FeO = moles of Fe2+) and update the composition.
+6. Compute unnormalized "wt%" of each oxide component in the updated composition.
+7. Compute the actual wt% of the oxide components via normalization (all components should sum to 100 wt%), which will change the wt% of all components. The wt% of Fe2O3 here can be compared to the desired value.
+
+
+In this method, no oxides (e.g. MnO) shouldn't be dropped at the start since it's an observation that affects the total wt%. They can, however, be dropped afterwards.
+
+#+BEGIN_SRC python :session py :results output
+from composition_processor import Molecule,normalise_dict_vals
+
+def apply_Fe3_fraction(f_Fe3,composition_wt):
+    ''' Apply a f_Fe3+ fraction (moles Fe3+/moles FeTot) to a wt% composition database, modifying it.
+
+    f_Fe3+ | :float: | Fe3+/FeTot fraction to apply. Takes values in [0,1].
+    composition_wt | :dict:-like | Composition of the sample expressed in oxide wt%.
+
+    Returns: :dict:-like
+    '''
+    # Check whether the fraction can be applied.
+    if not "FeO" in composition_wt and "Fe2O3" in composition_wt:
+        raise ValueError("Both FeO and Fe2O3 must be present as oxides in the composition for f_Fe3+ to be applicable.")
+    # Compute moles of each oxide component after casting wt% composition into dict.
+    mol = CompositionProcessor().get_moles(dict(composition_wt))
+    # Compute total moles of Fe atoms as a sum of Fe2+ and Fe3+ ions.
+    mol_Fe = mol["FeO"] + 2 * mol["Fe2O3"]
+    # Find the necessary moles of Fe3+ to get the requested Fe3+/FeTot fraction.
+    mol_Fe3_new = f_Fe3 * mol_Fe
+    # Find the necessary moles of Fe2+ to maintain the same FeTot:other elements molar ratio.
+    mol_Fe2_new = mol_Fe - mol_Fe3_new
+    # Update the composition in moles.
+    mol["FeO"] = mol_Fe2_new
+    mol["Fe2O3"] = mol_Fe3_new/2
+    # Express the composition in terms of wt.
+    wts = {k:v*Molecule(k).Mr() for k,v in mol.items()}
+    # Normalize to get closured wt%.
+    wts = normalise_dict_vals(wts)
+    return wts
+
+# Produce oxide compositions df without any oxide columns dropped.
+compositions = PEM_df_dehyd.drop(["tot","dehyd_tot"],axis=1)
+# Provide a demonstration f_Fe3+.
+f_Fe3 = 0.1
+# Compute the oxide composition after applying f_Fe3+ (for the first sample in `compositions`).
+modified_df = apply_Fe3_fraction(f_Fe3,compositions.iloc[0])
+
+print(modified_df)
+#+END_SRC
+
+#+RESULTS:
+: {'SiO2': 48.074081902558746, 'Al2O3': 1.6834497122514807, 'CaO': 0.16128859518577063, 'MgO': 41.03786693757951, 'Fe2O3': 0.9647070801969047, 'FeO': 7.812482083116666, 'K2O': 0.02016107439822133, 'Na2O': 0.05040268599555332, 'TiO2': 0.04032214879644266, 'MnO': 0.1411275207875493, 'H2O': 0.0040297219340440825, 'P2O5': 0.010080537199110664}
+
+Due to the non-unique nature of mapping normalized wt% to unnormalized wt%, it's not possible to invert this method. A grid-search of different $f_{Fe3}$ values can be employed to find a suitable value such that the final Fe2O3 wt% = 0.1 wt%. Since the suitable $f_{Fe3}$ value depends on the initial composition (e.g. initial FeO and Fe2O3 wt% values), it is not the same for all samples. Due to the monotonically increasing nature of the relation between $f_{Fe3}$ and Fe2O3 wt%, if a test $f_{Fe3}$ produces Fe2O3 wt% > 0.1, then $f_{Fe3}$ just needs to be reduced and vice versa. As such, a simple range-narrowing iterative algorithm can be produced to find the most-suitable $f_{Fe3}$.
+
+#+BEGIN_SRC python :session py :results output
+def range_halving_convergence(func,target,x_range,tolerance=1e-5,max_iter=100):
+    ''' Converge on a x value which results in func(x) ~ some target, with the level of approximation decided by a tolerance.
+
+    func | :function: | Monotonic, function that takes a single numerical input ("x") and returns another number ("y"). Must be valid over `x_range`.
+    target | :Numerical: | The y value which is to be fitted by func(x).
+    x_range | [:Numerical:,:Numerical:] | The finite x range over which to search for the best-fit x value.
+    tolerance | :Numerical: | The acceptable difference between func(x) and target before declaring a best-fit x value found.
+    max_iter | :int: | The maximum number of range halvings before declaring a failure to find a within-tolerance match.
+
+    Returns: :Numerical:
+    '''
+    # Start off with a very high misfit.
+    misfit = 1e6
+    # Initialize variable to accumulate the iteration count.
+    i = 0
+    # Continue the range halving algorithm as long as the maximum number of iterations isn't yet hit or a match has been found.
+    while i < max_iter and misfit > tolerance:
+        # Find the midpoint of the range.
+        x = (x_range[1] + x_range[0])/2
+        # Check the output ("y") of the function at the midpoint of the range.
+        found = func(x)
+        # Compute the misfit.
+        misfit = abs(found - target)
+        if found > target:
+            # If this output y is larger than the target y, set the subsequent range to the lower half range [min,midpoint].
+            x_range[1] = x
+        else:
+            # Otherwise, set the subsequent range to the upper half range [midpoint,max].
+            x_range[0] = x
+        # Increment the iteration counter.
+        i += 1
+    # Display whether a within-tolerance x value was found.
+    if i == max_iter:
+        print("No satisfactory convergence")
+    else:
+        print("Convergence found: func(%s) ~ %s" % (x,found))
+    return x
+#+END_SRC
+
+#+RESULTS:
+
+Applying this method to all the compositions.
+
+#+BEGIN_SRC python :session py :results output
+# Declare target.
+target = 0.1 # wt% Fe2O3
+
+f_Fe3_values = dict()
+
+for sample in compositions.index:
+    composition = compositions.loc[sample]
+    # Declare function that will map a Fe3+/FeTot fraction to Fe2O3 wt%.
+    func = lambda fraction : apply_Fe3_fraction(fraction,composition)["Fe2O3"]
+    # Search for a suitable Fe3+/FeTot fraction using the range halving function and accepting the default search options.
+    f_Fe3 = range_halving_convergence(func,target,[0,1])
+    f_Fe3_values[sample] = f_Fe3
+#+END_SRC
+
+#+RESULTS:
+: Convergence found: func(0.010356903076171875) ~ 0.10000042083408106
+: Convergence found: func(0.01134490966796875) ~ 0.09999282096247475
+: Convergence found: func(0.009136199951171875) ~ 0.10000684720662864
+: Convergence found: func(0.010356903076171875) ~ 0.09999760786483973
+: Convergence found: func(0.010267257690429688) ~ 0.09999724080622319
+
+The tolerated $f_{Fe3}$ values for Fe2O3 wt% \approx 0.1 is near 0.01, but with some variation for the different samples (up to +13%). These $f_{Fe3}$ values can be used to correct the Fe oxidation state of observed compositions and then used to find protoliths again.
+
+#+BEGIN_SRC python :session py
+force_theriak_rerun = False
+# Iterate through samples in the compositions df.
+for sample in compositions.index:
+    # Compute the corrected composition for each sample given the appropriate f_Fe3 to ensure Fe2O3 wt% ~ 0.1.
+    corrected_composition = apply_Fe3_fraction(f_Fe3_values[sample],compositions.loc[sample])
+    # Update the old composition with this corrected composition.
+    compositions.loc[sample] = pd.Series(corrected_composition)
+
+# Now remove MnO.
+dehyd_compositions_df = compositions.drop(["MnO"],axis=1)
+table_file_prepend = "protoliths-fe-corrected"
+
+if force_theriak_rerun:
+    dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
+else:
+    theriak_api = TheriakAPI()
+    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+#+END_SRC
+
+#+RESULTS:
+
+These protoliths can be loaded inspected on a ultramafic ternary plot again.
+
+# Different to the previous plot (which was wrong) as this uses the correct P-T conditions of 14000 bar 700 deg C (rather than 11000 bar 650 deg C).
+
+#+BEGIN_SRC python :session py
+plt.figure()
+fe_corr_protoliths = extract_umafic_protoliths(dfs)
+plot_umafic_ternary(fe_corr_protoliths)
 plt.show()
 #+END_SRC
 
 #+RESULTS:
 : None
-* Compositional Corrections
-MnO can be removed from the compositions as it is not relevant for PEM. As a check of the compositions' suitability for PEM, the protolith mineralogy can be checked against expected mantle protolith mineralogy. This protolith mineralogy can be found by running =theriak.exe= for each composition at the start of the serpentinisation path.
+
+The ultramafic protolith lithologies are starting to lie closer to the expected range (with some even lying /within/ the expected range). However, the protoliths all appear a bit Ol-depleted (and pyroxene-enriched) compared to expected, which is a symptom of SiO2 enrichment.
+** SiO2 Correction
+The SiO2 enrichment of an originally more SiO2-depleted mantle protolith is supported by \cite{Bebout1989}, who found that the SiO2 added during serpentinisation. As such, the mantle SiO2 is to be reduced to the amount expected for mantle rocks - i.e. 44 wt% \cite{Benard2021}. Though setting SiO2 in all samples (without any oxide columns removed) to 44 wt% may appear to be the simple solution to this, this change will not only change the Fe2O3 wt% away from 0.1 wt% after normalization, but also modify give rise to a different SiO2 wt% after normalization too.
 
 #+BEGIN_SRC python :session py
+# Set all SiO2 wt% to 44.
+compositions["SiO2"] = 44
+# Renormalize
+compositions = compositions.div(compositions.sum(axis=1)/100,axis=0)
 #+END_SRC
 
-Preliminary PEM modelling with the compositions as-is returned unexpected results in the protolith (i.e. mineralogy at the end of the cooling path/start of serpentinisation path).
+#+RESULTS:
 
-The issue of treating the observed composition as the protolith composition is further highlighted when the composition is plotted onto a Fo-Opx-Cpx ternary diagram.
+* Serpentinisation Path End Corrections
+Furthermore, since this oxidation is likely to have arisen from being near the (oxidizing) earth's surface (i.e. is a recent effect), the final composition in the PEM (i.e. the final serpentinite composition) will also be Fe-oxidation corrected: \cite{Eberhard2023} finds that antigorite serpentinite has a Fe3+/FeTot is 0.4, which will be assumed true for the theoretical, unweathered serpentinite of Santa Catalina.

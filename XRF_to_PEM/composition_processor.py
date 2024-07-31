@@ -85,7 +85,7 @@ class CompositionProcessor():
         '''
         self.mol_oxides = self.get_moles(wt_oxides,oxides)
 
-    def get_moles(self,wt_oxides,oxides):
+    def get_moles(self,wt_oxides,oxides=oxides):
         ''' Compute moles of each oxide from a dictionary database of oxide wt%.
 
         wt_oxides | :dict: {"<oxide>":<weight%>} | Oxide weight% data
@@ -216,9 +216,9 @@ class CompositionProcessor():
 
         Returns: str
         '''
-        # Load any {"<oxide>":<wt%>} composition if provided to this method.
+        # Load any {"<oxide>":<wt%>} (or suitably castable) composition if provided to this method.
         if wt_oxides is not None:
-            self.load_composition(wt_oxides,oxides)
+            self.load_composition(dict(wt_oxides),oxides)
         # Find the proportion of each element (in dictionary format).
         element_proportions = self.get_element_proportions(oxides)
         # Construct and return the Theriak-Domino composition string from the element proportions.
