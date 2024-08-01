@@ -1,0 +1,104 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; org-confirm-babel-evaluate: nil; -*-
+# NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
+# NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
+
+#+TITLE: PEM Result Visualization
+* Introduction
+Phase Equilibrium results were produced in the notebook =notebook.org/notebook.ipynb=, but only partly visualized. More comprehensive visualization will be performed here.
+* Volume Stackplots
+Volume stackplots for subsequent path segments in a rock's history can be placed side-by-side to produce a combined phase equilibrium history.
+- Note: the figures may appear squashed due to screen size limits. If the figures are saved directly to non-volatile storage, their layouts will be better, and can also be editted.
+
+#+BEGIN_SRC python :session py
+from theriak_api import TheriakAPI,TheriakOutput,group_cols
+import matplotlib.pyplot as plt
+import pandas as pd
+
+path_stages = ["cooling","serpentinisation","exhumation"]
+
+# There's an empty row in the raw data so set header row to second row (index: 1).
+df = pd.read_excel("../DATASETS/XRF/Serp-P.Lindquist. U.Wash. 11-2023.xlsx",header=1)
+# Ignore columns after the 6th.
+df = df.iloc[:,:6]
+# Find the sample names from the column headers.
+samples = df.columns[1:]
+
+def stackplot_history(sample):
+    fig = plt.figure(figsize=(13.5,8))
+    axs_grid = fig.add_gridspec(4,3,height_ratios=[6,1,3,1],hspace=.3,wspace=.05)
+    axs = axs_grid.subplots(sharex="col",sharey="row")
+    theriak_api = TheriakAPI()
+    for i,path_stage in enumerate(path_stages):
+        df = theriak_api.read_theriak_table(f"./local_data/PEM/{path_stage}-{sample}-loop_table")
+        theriak_output = TheriakOutput(df)
+        theriak_output.characterize_output(axs=axs[:,i])
+    # Remove y labels for axes columns after the first.
+    for ax in axs[:,1:].flatten():
+        ax.set_ylabel("")
+    # Remove the smallest-temperature x tick for all labelled temperature axes (to avoid overlap in the tick label).
+    for ax in axs[-1,:]:
+        ax.set_xticks(ax.get_xticks()[1:])
+    # Set a centered title above the middle column
+    axs[0,1].set_title(sample)
+    return fig,axs
+
+for sample in samples:
+    _,_ = stackplot_history(sample)
+# plt.savefig("figure.svg")
+# plt.savefig("figure.png")
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+* Magnetite Volume on Serpentinization Path
+Plotting how magnetite volume fraction changes over the course of the serpentinisation path alongside how the volume fraction of serpentine and clinochlore change can reveal different populations of magnetite/magnetite associations.
+
+#+BEGIN_SRC python :session py
+from theriak_output_config import *
+
+def local_area_stack(x,y,mineral,ax,baseline_y=0,**plotstyle_kwargs):
+    y = baseline_y+y
+    ax.plot(x,y,c="k",**plotstyle_kwargs)
+    ax.fill_between(x,0,y,color=mineral_colors[mineral],zorder=-
+100)
+    return
+
+def magnetite_silicate_plots(serp_df):
+    serp_vol_df = group_cols(TheriakOutput(serp_df).extract_volumes())
+    # Normalize to volume fractions.
+    serp_vol_df = serp_vol_df.div(serp_vol_df.sum(axis=1),axis=0)
+    x_var = serp_df[":Temperature"]
+
+    fig,axs = plt.subplots(3,1,sharex=True,height_ratios=[4,1,1],constrained_layout=True)
+    if "Hem" in serp_vol_df:
+        local_area_stack(x_var,serp_vol_df["Hem"],"Hem",axs[0],baseline_y=serp_vol_df["Mag"])
+        mag_linestyle = "-."
+    else:
+        mag_linestyle = "-"
+
+    local_area_stack(x_var,serp_vol_df["Mag"],"Mag",axs[0],linestyle=mag_linestyle)
+    axs[0].vlines(580,0,0.05,linestyle="--",color="grey",label="Mag $T_C$")
+    axs[0].set_ylim([0,0.03])
+    axs[0].set_xlim([max(x_var),min(x_var)])
+    axs[0].set_ylabel("Rock volume fraction")
+    axs[0].legend()
+    axs[0].set_title(f"Magnetite stabilised during serpentinisation path: {sample}")
+
+    for i,mineral in enumerate(["Srp","Clc"]):
+        local_area_stack(x_var,serp_vol_df[mineral],mineral,axs[i+1])
+        axs[i+1].set_ylim([0,max(serp_vol_df[mineral])*1.07])
+
+    axs[2].set_xlabel("(Decreasing) Temperature /$^{\\circ}\\text{C}$")
+    return
+
+for sample in samples:
+    theriak_api = TheriakAPI()
+    serp_df = theriak_api.read_theriak_table(f"./local_data/PEM/serpentinisation-{sample}-loop_table")
+    magnetite_silicate_plots(serp_df)
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None

@@ -329,7 +329,7 @@ class TheriakOutput():
         self.volume_stackplot(x_col,major_df,major_cmap,axs[0],2)
         if not trace_df.empty:
             self.volume_stackplot(x_col,trace_df,trace_cmap,axs[1],1)
-            axs[1].set_ylim(0,critical_fraction)
+            axs[1].set_ylim(0,critical_fraction*1.1)
         return axs
 
     def xy_chart(self,x,y,ax=None,plot_style_kwargs_dict={}):
@@ -371,6 +371,8 @@ class TheriakOutput():
         # Label axes.
         ax.set_xlabel("T /$^{\circ}$C")
         ax.set_ylabel("P /kbar")
+        # Invert y axis such that zero (shallow) is at the top.
+        ax.invert_yaxis()
         return ax
 
     def plot_column(self,column,vs="T",ax=None,y_label=None,**plot_style_kwargs):
@@ -455,11 +457,11 @@ class TheriakOutput():
         axs[0].set_xlim([max_x,min(x_var)])
         return axs
 
-TAPI = TheriakAPI()
+# TAPI = TheriakAPI()
 # TAPI.add_PTX_command("SI(43.95)MG(47.40)O(140)",[14000,4000],[800,600],10)
 # TAPI.save_all()
 # df = TAPI.execute_theriak()
-df = TAPI.read_theriak_table()
-output = TheriakOutput(df)
-output.characterize_output()
-plt.show()
+# df = TAPI.read_theriak_table()
+# output = TheriakOutput(df)
+# output.characterize_output()
+# plt.show()

@@ -2,7 +2,7 @@
 # NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
 # NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
 
-#+TITLE: XRF Data Analysis and PEM Modelling
+#+TITLE: Phase Equilibrium Modelling
 * Introduction
 XRF (+titration) compositional data was collected by Peter Lindquist. Major element oxide and iron oxidation state data is contained within this data.
 * Reading the Data

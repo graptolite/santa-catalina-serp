@@ -3,6 +3,6 @@
 !.gitignore
 
 # Git track only the org notebook sources (to reduce issues with changing id, execution_count etc. in Jupyter notebooks)
-!notebook.org
+!*.org
 !*.py
 !*/
