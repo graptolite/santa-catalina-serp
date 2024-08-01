@@ -327,7 +327,7 @@ plot_umafic_ternary(protoliths)
 #+END_SRC
 
 #+RESULTS:
-: None
+: TernaryAxes(0.125,0.11;0.775x0.77)
 
 Preliminary PEM modelling with the compositions as-is returned unexpected results in the ultramafic/mantle protolith.
 
@@ -362,13 +362,13 @@ In this method, no oxides (e.g. MnO) shouldn't be dropped at the start since it'
 #+BEGIN_SRC python :session py :results output
 from composition_processor import Molecule,normalise_dict_vals
 
-def apply_Fe3_fraction(f_Fe3,composition_wt):
+def apply_Fe3_fraction(composition_wt,f_Fe3):
     ''' Apply a f_Fe3+ fraction (moles Fe3+/moles FeTot) to a wt% composition database, modifying it.
 
     f_Fe3+ | :float: | Fe3+/FeTot fraction to apply. Takes values in [0,1].
     composition_wt | :dict:-like | Composition of the sample expressed in oxide wt%.
 
-    Returns: :dict:-like
+    Returns: :dict:
     '''
     # Check whether the fraction can be applied.
     if not "FeO" in composition_wt and "Fe2O3" in composition_wt:
@@ -395,7 +395,7 @@ compositions = PEM_df_dehyd.drop(["tot","dehyd_tot"],axis=1)
 # Provide a demonstration f_Fe3+.
 f_Fe3 = 0.1
 # Compute the oxide composition after applying f_Fe3+ (for the first sample in `compositions`).
-modified_df = apply_Fe3_fraction(f_Fe3,compositions.iloc[0])
+modified_df = apply_Fe3_fraction(compositions.iloc[0],f_Fe3)
 
 print(modified_df)
 #+END_SRC
@@ -450,18 +450,20 @@ def range_halving_convergence(func,target,x_range,tolerance=1e-5,max_iter=100):
 Applying this method to all the compositions.
 
 #+BEGIN_SRC python :session py :results output
+def find_Fe3_fractions(compositions,target_wt):
+    f_Fe3_values = dict()
+    for sample in compositions.index:
+        composition = compositions.loc[sample]
+        # Declare function that will map a Fe3+/FeTot fraction to Fe2O3 wt%.
+        func = lambda fraction : apply_Fe3_fraction(composition,fraction)["Fe2O3"]
+        # Search for a suitable Fe3+/FeTot fraction using the range halving function and accepting the default search options.
+        f_Fe3 = range_halving_convergence(func,target_wt,[0,1])
+        f_Fe3_values[sample] = f_Fe3
+    return f_Fe3_values
+
 # Declare target.
-target = 0.1 # wt% Fe2O3
-
-f_Fe3_values = dict()
-
-for sample in compositions.index:
-    composition = compositions.loc[sample]
-    # Declare function that will map a Fe3+/FeTot fraction to Fe2O3 wt%.
-    func = lambda fraction : apply_Fe3_fraction(fraction,composition)["Fe2O3"]
-    # Search for a suitable Fe3+/FeTot fraction using the range halving function and accepting the default search options.
-    f_Fe3 = range_halving_convergence(func,target,[0,1])
-    f_Fe3_values[sample] = f_Fe3
+Fe2O3_target = 0.1 # wt% Fe2O3
+f_Fe3_values = find_Fe3_fractions(compositions,Fe2O3_target)
 #+END_SRC
 
 #+RESULTS:
@@ -475,17 +477,22 @@ The tolerated $f_{Fe3}$ values for Fe2O3 wt% \approx 0.1 is near 0.01, but with 
 
 #+BEGIN_SRC python :session py
 force_theriak_rerun = False
-# Iterate through samples in the compositions df.
-for sample in compositions.index:
-    # Compute the corrected composition for each sample given the appropriate f_Fe3 to ensure Fe2O3 wt% ~ 0.1.
-    corrected_composition = apply_Fe3_fraction(f_Fe3_values[sample],compositions.loc[sample])
-    # Update the old composition with this corrected composition.
-    compositions.loc[sample] = pd.Series(corrected_composition)
+
+def correct_oxide(compositions,application_function,corrections):
+    # Iterate through samples in the compositions df.
+    for sample in compositions.index:
+        # Compute the corrected composition for each sample given the appropriate f_Fe3 to ensure Fe2O3 wt% ~ 0.1.
+        corrected_composition = application_function(compositions.loc[sample],corrections[sample])
+        # Update the old composition with this corrected composition.
+        compositions.loc[sample] = pd.Series(corrected_composition)
+    return compositions
+
+compositions = correct_oxide(compositions,apply_Fe3_fraction,f_Fe3_values)
 
 # Now remove MnO.
 dehyd_compositions_df = compositions.drop(["MnO"],axis=1)
-table_file_prepend = "protoliths-fe-corrected"
 
+table_file_prepend = "protoliths-fe-corrected"
 if force_theriak_rerun:
     dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
 else:
@@ -503,24 +510,318 @@ These protoliths can be loaded inspected on a ultramafic ternary plot again.
 plt.figure()
 fe_corr_protoliths = extract_umafic_protoliths(dfs)
 plot_umafic_ternary(fe_corr_protoliths)
+# plt.show()
+#+END_SRC
+
+#+RESULTS:
+: TernaryAxes(0.125,0.11;0.775x0.77)
+
+The ultramafic protolith lithologies are starting to lie closer to the expected range (with some even lying /within/ the expected range). However, the protoliths all appear a bit Ol-depleted (and pyroxene-enriched) compared to expected, which is a symptom of SiO2 enrichment.
+** SiO2 Correction
+The SiO2 enrichment of an originally more SiO2-depleted mantle protolith is supported by \cite{Bebout1989}, who found that the SiO2 added during serpentinisation. As such, the mantle SiO2 is to be reduced to the amount expected for mantle rocks - i.e. 44 wt% \cite{Benard2021}. Though setting SiO2 in all samples (without any oxide columns removed) to 44 wt% may appear to be the simple solution to this, this change will not only change the Fe2O3 wt% away from 0.1 wt% after normalization, but also modify give rise to a different SiO2 wt% after normalization too. To fix the second issue, a range halving convergence search can be performed for each sample.
+
+#+BEGIN_SRC python :session py :results output
+def modify_SiO2(composition,new_SiO2):
+    composition = dict(composition)
+    composition["SiO2"] = new_SiO2
+    composition = normalise_dict_vals(composition)
+    return composition
+
+def find_SiO2_values(compositions,target_wt):
+    SiO2_values = dict()
+    for sample in compositions.index:
+        composition = compositions.loc[sample]
+        # Declare function that will map a Fe3+/FeTot fraction to Fe2O3 wt%.
+        func = lambda SiO2 : modify_SiO2(composition,SiO2)["SiO2"]
+        # Search for a suitable Fe3+/FeTot fraction using the range halving function and accepting the default search options.
+        SiO2 = range_halving_convergence(func,target_wt,[0,100],tolerance=0.01)
+        SiO2_values[sample] = SiO2
+    return SiO2_values
+
+SiO2_target = 44 # wt% SiO2
+SiO2_values = find_SiO2_values(compositions,SiO2_target)
+compositions = correct_oxide(compositions,modify_SiO2,SiO2_values)
+
+print("Fe2O3 wt%%\n%s" % compositions["Fe2O3"])
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Convergence found: func(40.771484375) ~ 44.00320591917726
+Convergence found: func(37.1337890625) ~ 44.00150611801924
+Convergence found: func(42.6513671875) ~ 43.998167447670546
+Convergence found: func(41.943359375) ~ 44.0023780362844
+Convergence found: func(41.30859375) ~ 43.99279915792842
+Fe2O3 wt%
+23C-06B    0.107927
+23C-06C    0.118486
+23C-07A    0.103165
+23C-07B    0.104907
+23C-M02    0.106495
+Name: Fe2O3, dtype: object
+#+end_example
+
+Although the SiO2 wt% is now close to 44, the Fe2O3 wt% has been modified up to +19% from 0.1 (for 06C). One way to tackle this issue would be to iteratively correct alternate oxides until the misfit on both is satisfactory.
+
+#+BEGIN_SRC python :session py
+SiO2_tolerance = 0.01
+Fe2O3_tolerance = 0.0005
+max_iter = 20
+
+i = 0
+while not (all(SiO2_diff<SiO2_tolerance) and all(Fe2O3_diff<Fe2O3_tolerance)) and i < max_iter:
+    f_Fe3_values = find_Fe3_fractions(compositions,0.1)
+    compositions = correct_oxide(compositions,apply_Fe3_fraction,f_Fe3_values)
+    SiO2_values = find_SiO2_values(compositions,44)
+    compositions = correct_oxide(compositions,modify_SiO2,SiO2_values)
+
+    SiO2_diff = abs(compositions["SiO2"] - SiO2_target)
+    Fe2O3_diff = abs(compositions["Fe2O3"] - Fe2O3_target)
+    i += 1
+
+if i != max_iter:
+    print("Acceptable compositions found")
+#+END_SRC
+
+#+RESULTS:
+
+The change in water wt% as a result of this process is ignored since it is very small.
+
+With an acceptable composition found, protolith PEM can be rerun.
+
+#+BEGIN_SRC python :session py
+force_theriak_rerun = False
+
+# Now remove MnO.
+dehyd_compositions_df = compositions.drop(["MnO"],axis=1)
+
+table_file_prepend = "protoliths-si-fe-corrected"
+if force_theriak_rerun:
+    dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
+else:
+    theriak_api = TheriakAPI()
+    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+
+plt.figure()
+fe_si_corr_protoliths = extract_umafic_protoliths(dfs)
+plot_umafic_ternary(fe_si_corr_protoliths)
+# plt.show()
+#+END_SRC
+
+#+RESULTS:
+: TernaryAxes(0.125,0.11;0.775x0.77)
+
+With this silica correction added on, the ultramafic protoliths plot much closer to expected, with the samples lying in or very close to the expected range from \cite{Neumann2004}. As such, these updated compositions in =dehyd_compositions_df= are accepted as protolith compositions.
+* Serpentinisation Path Corrections
+Since the oxidation that affected $f_{Fe3}$ likely arose at least partially from being near the (oxidizing) earth's surface (i.e. is a recent effect), the final composition in the PEM (i.e. the final serpentinite composition) will also be Fe-oxidation corrected: \cite{Eberhard2023} finds that antigorite serpentinite has a Fe3+/FeTot is 0.4, which will be assumed true for the theoretical, unweathered serpentinite of Santa Catalina.
+
+With water following a initially rapid then slower increase along the serpentinisation path \citep{Grove1995}, and silica being introduced by the water \citep{Bebout1989}, the serpentinisation path results in an increase in both water and silica proportional to each other (i.e. following the same relative path) before reaching the observed values (i.e. their addition is not assumed to be related to surface processes).
+
+The changes along the serpentinisation path are summarized in Table [[tab:serp-changes]].
+| Component    | Protolith       | End             |
+|--------------+-----------------+-----------------|
+| H2O          | 0.004 wt%       | observed        |
+| SiO2         | 44 wt%          | observed        |
+| Fe oxidation | Fe2O3 = 0.1 wt% | Fe3/FeTot = 0.4 |
+
+The compositions of the post-serpentinisation rock require only a modification to their Fe oxidation state.
+
+#+BEGIN_SRC python :session py
+hyd_compositions_df = correct_oxide(PEM_df_hyd.drop(["dehyd_tot","tot"],axis=1),apply_Fe3_fraction,{sample:0.4 for sample in PEM_df_hyd.index})
+hyd_compositions_df.drop(["MnO"],axis=1,inplace=True)
+#+END_SRC
+
+#+RESULTS:
+: None
+
+
+* PEM Running
+With the protolith and final compositions found (=dehyd_compositions_df= and =hyd_compositions_df= respectively), the full PEM can be constructed.
+
+The number of steps along each path must be even and at least 6, and is declared by the variable n:
+#+BEGIN_SRC python :session py
+# Number of steps in each P-T path segment, must be even.
+n = 8
+if n%2 != 0:
+    raise ValueError("n must be even")
+if n < 6:
+    raise ValueError("n must be at least 6")
+#+END_SRC
+
+#+RESULTS:
+
+** Cooling Path
+The cooling path simply involves changing the P-T of modelling for a constant composition (protolith composition). The P-T range to be covered is retrieved from =paths["cooling"]= and interpolated along.
+
+#+BEGIN_SRC python :session py
+def PT_change_path(composition,TP_path,n_steps,table_file_prepend):
+    # Initialize new TheriakAPI instance, accepting the default folder/file paths. Also implicitly accept the previously-created directive file (by not creating a new one).
+    theriak_api = TheriakAPI()
+    composition = CompositionProcessor().theriak_domino_formula(composition)
+    theriak_api.add_PTX_command(composition,TP_path[1],TP_path[0],n_steps)
+    theriak_api.save_PTX_commandfile()
+    df = theriak_api.execute_theriak()
+    shutil.move(os.path.join(theriak_api.theriak_dir,"loop_table"),
+                    f"./local_data/PEM/{table_file_prepend}-loop_table")
+    return df
+
+def PT_change_path_all(compositions,TP_path,n_steps,table_file_prepend):
+    samples = compositions.index
+    dfs = []
+    for sample in samples:
+        composition = compositions.loc[sample]
+        df = PT_change_path(composition,TP_path,n_steps,table_file_prepend+f"-{sample}")
+        dfs.append(df)
+    return dfs
+
+def cooling_path_all(n_steps,table_file_prepend):
+    return PT_change_path_all(dehyd_compositions_df,paths["cooling"],n_steps,table_file_prepend)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session py
+force_theriak_rerun = False
+
+table_file_prepend = "cooling"
+
+if force_theriak_rerun:
+    dfs = cooling_path_all(n,table_file_prepend=table_file_prepend)
+else:
+    theriak_api = TheriakAPI()
+    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+#+END_SRC
+
+#+RESULTS:
+
+The first output can be checked for sensibility.
+
+#+BEGIN_SRC python :session py
+plt.close("all")
+TheriakOutput(dfs[0]).characterize_output()
 plt.show()
 #+END_SRC
 
 #+RESULTS:
 : None
 
-The ultramafic protolith lithologies are starting to lie closer to the expected range (with some even lying /within/ the expected range). However, the protoliths all appear a bit Ol-depleted (and pyroxene-enriched) compared to expected, which is a symptom of SiO2 enrichment.
-** SiO2 Correction
-The SiO2 enrichment of an originally more SiO2-depleted mantle protolith is supported by \cite{Bebout1989}, who found that the SiO2 added during serpentinisation. As such, the mantle SiO2 is to be reduced to the amount expected for mantle rocks - i.e. 44 wt% \cite{Benard2021}. Though setting SiO2 in all samples (without any oxide columns removed) to 44 wt% may appear to be the simple solution to this, this change will not only change the Fe2O3 wt% away from 0.1 wt% after normalization, but also modify give rise to a different SiO2 wt% after normalization too.
+** Final Exhumation Path
+The cooling path also involves changing the P-T of modelling for a constant composition (final composition). The P-T range to be covered is retrieved from =paths["exhumation"]= and interpolated along.
 
 #+BEGIN_SRC python :session py
-# Set all SiO2 wt% to 44.
-compositions["SiO2"] = 44
-# Renormalize
-compositions = compositions.div(compositions.sum(axis=1)/100,axis=0)
+force_theriak_rerun = False
+
+def exhumation_path_all(n_steps,table_file_prepend):
+    return PT_change_path_all(hyd_compositions_df,paths["exhumation"],n_steps,table_file_prepend)
+
+table_file_prepend = "exhumation"
+
+if force_theriak_rerun:
+    dfs = exhumation_path_all(n,table_file_prepend=table_file_prepend)
+else:
+    theriak_api = TheriakAPI()
+    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 #+END_SRC
 
 #+RESULTS:
 
-* Serpentinisation Path End Corrections
-Furthermore, since this oxidation is likely to have arisen from being near the (oxidizing) earth's surface (i.e. is a recent effect), the final composition in the PEM (i.e. the final serpentinite composition) will also be Fe-oxidation corrected: \cite{Eberhard2023} finds that antigorite serpentinite has a Fe3+/FeTot is 0.4, which will be assumed true for the theoretical, unweathered serpentinite of Santa Catalina.
+
+The first output can be checked for sensibility.
+
+#+BEGIN_SRC python :session py
+plt.close("all")
+TheriakOutput(dfs[0]).characterize_output()
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+
+** Serpentinisation Path
+The serpentinisation path is more complicated as it involved changing both the P-T and composition along the path. The P-T range to be covered is retrieved from =paths["serpentinisation"]=, and the compositions to be covered are between the protolith and final compositions. With 8 steps in the PEM, the composition will be shifted away from protolith (30%) to final composition (70%) in the first three steps, with the remaining shift towards final composition coming from the remaining 5 steps.
+
+Intermediate compositions will be treated as linear mixtures between the two endpoint composition.
+
+#+BEGIN_SRC python :session py
+def mix_endmembers(endmember_1,endmember_2,frac_2):
+    ''' Find the elements dictionary that represents the mixture of two components (defined by elements dictionaries), with the fraction of the second component being specified. '''
+    out = endmember_1.copy()
+    for elem in endmember_1:
+        x1 = float(endmember_1[elem])
+        if elem in endmember_2:
+            x2 = float(endmember_2[elem])
+        else:
+            x2 = 0
+        out[elem] = (x1 * (1-frac_2) + x2 * (frac_2))
+    return out
+
+# First 3 coords of any of the serpentinisation paths involve increase in water to the maximum (=observed in XRF).
+interp_coords_f = lambda n : np.append(np.linspace(0,0.7,3),
+                            np.linspace(0.7,1,n-2)[1:],axis=0)
+#+END_SRC
+
+#+RESULTS:
+
+With intermediate compositions found, the PEM can be set up. However another issue with the serpentinisation path is the large number variables (columns in the output table) stored by theriak. This is due to theriak storing all history in one table. The way around this issue is to execute only one point and accumulate the loop table in Python (as a pandas dataframe).
+
+#+BEGIN_SRC python :session py
+force_theriak_rerun = False
+
+def serpentinisation_path(sample,n_steps,table_file_prepend):
+    composition_1 = dict(dehyd_compositions_df.loc[sample])
+    composition_2 = dict(hyd_compositions_df.loc[sample])
+    interpolated_compositions = [CompositionProcessor().theriak_domino_formula(mix_endmembers(composition_1,composition_2,f)) for f in interp_coords_f(n_steps)]
+    interpolated_TP = np.linspace(*np.array(paths["serpentinisation"]).T,n_steps)
+
+    # Initialize new TheriakAPI instance, accepting the default folder/file paths. Also implicitly accept the previously-created directive file (by not creating a new one).
+    theriak_api = TheriakAPI()
+    combined_df = []
+    for composition,TP in zip(interpolated_compositions,interpolated_TP):
+        theriak_api.clear_PTX_commands()
+        theriak_api.add_PTX_command(composition,TP[1],TP[0],1)
+        theriak_api.save_PTX_commandfile()
+        df = theriak_api.execute_theriak()
+        # Clean the column names.
+        df.columns = [c.replace(" ","") for c in df.columns]
+        # Store data.
+        combined_df.append(df)
+
+    # Combine stored data.
+    combined_df = pd.concat(combined_df,axis=0).fillna(0)
+    # Save the combined output table.
+    combined_df.to_csv(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table",index=False)
+    return combined_df
+
+def serpentinisation_path_all(n_steps,table_file_prepend):
+    samples = compositions.index
+    dfs = []
+    for sample in samples[2:]:
+        df = serpentinisation_path(sample,n_steps,table_file_prepend)
+        dfs.append(df)
+    return dfs
+
+table_file_prepend = "serpentinisation"
+
+if force_theriak_rerun:
+    dfs = serpentinisation_path_all(n,table_file_prepend=table_file_prepend)
+else:
+    theriak_api = TheriakAPI()
+    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+#+END_SRC
+
+#+RESULTS:
+
+The first output can be checked for sensibility.
+
+#+BEGIN_SRC python :session py
+plt.close("all")
+TheriakOutput(dfs[0]).characterize_output()
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+** Postscript
+To avoid creating and excessively long notebook, result visualization will be handled in a separate notebook (=results.org/results.ipynb=).

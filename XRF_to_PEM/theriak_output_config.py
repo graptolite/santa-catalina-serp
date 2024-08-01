@@ -40,7 +40,7 @@ mergers = {"Cpx":["[cen1]","cen","[jd]","[di]","[kjd1]",
            }
 
 # Describe special plotting colors for the mineral groupings.
-special_colors = {"Fo":"20a107ff",
+special_colors = {"Ol":"20a107ff",
                   "Opx":"a6600cff",
                   "Cpx":"1a4103ff",
                   "Cam":"8be560ff",

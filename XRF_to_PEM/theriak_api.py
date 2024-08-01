@@ -114,7 +114,7 @@ class TheriakAPI():
         Returns: None
         '''
         if not os.path.exists(filepath):
-            raise FileNotFoundError("%s (required: %s) not found. Check that any of the functions {%s} has been run before, or manually check the expected location." % (file_purpose,filepath,", ".join(creator_functions)))
+            raise FileNotFoundError("%s (required: %s) not found. Check that any of the functions {%s} has been run before, or manually check the expected location." % (filepath,file_purpose,", ".join(creator_functions)))
         return
 
     def execute_theriak(self):
@@ -231,7 +231,7 @@ class TheriakOutput():
         # Find the names of the volume columns that are not be ignored.
         volume_columns = [c for c in self.df.columns if (c.startswith("V") and c.replace("V_","") not in ignore)]
         # Isolate the volume columns.
-        vol_df = self.df.loc[:,volume_columns].sort_values(0,axis=1,ascending=False)
+        vol_df = self.df.loc[:,volume_columns]
         # Replace the string designations for volume in the column names.
         vol_df.columns = [c.replace("V_","") for c in vol_df.columns]
         return vol_df
@@ -329,6 +329,7 @@ class TheriakOutput():
         self.volume_stackplot(x_col,major_df,major_cmap,axs[0],2)
         if not trace_df.empty:
             self.volume_stackplot(x_col,trace_df,trace_cmap,axs[1],1)
+            axs[1].set_ylim(0,critical_fraction)
         return axs
 
     def xy_chart(self,x,y,ax=None,plot_style_kwargs_dict={}):
@@ -440,6 +441,9 @@ class TheriakOutput():
         try:
             # Plot H2O-T path on the next axis if relevant.
             self.plot_column(["n_H2O_solids","n_H2O_[H2O]"],ax=axs[3],y_label="n_H2O",c="b")
+            y = (self.df["n_H2O_solids"] if "n_H2O_solids" in self.df else 0) + (
+                self.df["n_H2O_[H2O]"] if "n_H2O_[H2O]" in self.df else 0)
+            axs[3].set_ylim(0,1.1*max(y))
         except (KeyError,IndexError):
             pass
         # Isolate the (previously implicit) x variable.
@@ -451,10 +455,11 @@ class TheriakOutput():
         axs[0].set_xlim([max_x,min(x_var)])
         return axs
 
-# TAPI = TheriakAPI()
+TAPI = TheriakAPI()
 # TAPI.add_PTX_command("SI(43.95)MG(47.40)O(140)",[14000,4000],[800,600],10)
 # TAPI.save_all()
 # df = TAPI.execute_theriak()
-# output = TheriakOutput(df)
-# output.characterize_output()
-# plt.show()
+df = TAPI.read_theriak_table()
+output = TheriakOutput(df)
+output.characterize_output()
+plt.show()
