@@ -187,7 +187,7 @@ The Python code used to interface with =theriak.exe=, and basic plotting methods
 The following code imports the functions and classes from that file into this notebook session, where the purpse of each function/class method call will be clarified with comments.
 
 #+BEGIN_SRC python :session py
-from theriak_api import TheriakAPI,group_cols,TheriakOutput
+from theriak_api import TheriakAPI,group_cols,TheriakOutput,read_theriak_table
 
 # Imported:
 # TheriakAPI (class) - handling the input for theriak.exe, including the construction of command/directive files.
@@ -250,8 +250,7 @@ table_file_prepend = "protoliths-unmodified"
 if force_theriak_rerun:
     dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
 else:
-    theriak_api = TheriakAPI()
-    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 #+END_SRC
 
 #+RESULTS:
@@ -496,8 +495,7 @@ table_file_prepend = "protoliths-fe-corrected"
 if force_theriak_rerun:
     dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
 else:
-    theriak_api = TheriakAPI()
-    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 #+END_SRC
 
 #+RESULTS:
@@ -599,8 +597,7 @@ table_file_prepend = "protoliths-si-fe-corrected"
 if force_theriak_rerun:
     dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
 else:
-    theriak_api = TheriakAPI()
-    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 
 plt.figure()
 fe_si_corr_protoliths = extract_umafic_protoliths(dfs)
@@ -688,8 +685,7 @@ table_file_prepend = "cooling"
 if force_theriak_rerun:
     dfs = cooling_path_all(n,table_file_prepend=table_file_prepend)
 else:
-    theriak_api = TheriakAPI()
-    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 #+END_SRC
 
 #+RESULTS:
@@ -719,8 +715,7 @@ table_file_prepend = "exhumation"
 if force_theriak_rerun:
     dfs = exhumation_path_all(n,table_file_prepend=table_file_prepend)
 else:
-    theriak_api = TheriakAPI()
-    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 #+END_SRC
 
 #+RESULTS:
@@ -806,8 +801,7 @@ table_file_prepend = "serpentinisation"
 if force_theriak_rerun:
     dfs = serpentinisation_path_all(n,table_file_prepend=table_file_prepend)
 else:
-    theriak_api = TheriakAPI()
-    dfs = [theriak_api.read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 #+END_SRC
 
 #+RESULTS:

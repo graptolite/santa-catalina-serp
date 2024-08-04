@@ -141,31 +141,41 @@ class TheriakAPI():
         # Parse and return the output table.
         return self.read_theriak_table()
 
-    def read_theriak_table(self,theriak_table=None):
+    def read_theriak_table(self):
         ''' Parse the output table from the latest theriak run (or alternative, optionally-provided path) into a pandas dataframe.
 
         theriak_table | :str: | Filepath to the theriak table.
 
         Returns: :pandas.DataFrame:
         '''
-        if not theriak_table:
-            # Check whether the table file exists to be read.
-            theriak_table = os.path.join(self.theriak_dir,"loop_table")
+        theriak_table = os.path.join(self.theriak_dir,"loop_table")
+        # Check whether the table file exists to be read.
         self.check_file_exists(theriak_table,
                                "to be read",
                                ["<self>.execute_theriak()"])
         # Load the data outputted from latest theriak run.
-        df = pd.read_csv(theriak_table)
-        # Clean column names.
-        df.columns = [c.replace(" ","") for c in df.columns]
-        # Find then remove columns whose content sums to zero.
-        empty_cols = df.columns[df.sum()==0].to_list()
-        df.drop(empty_cols,axis=1,inplace=True)
+        df = read_theriak_table(theriak_table)
         return df
 
 ###
 # Output handling
 ###
+
+def read_theriak_table(theriak_table_file):
+    ''' Parse the output table from a theriak run into a pandas dataframe.
+
+    theriak_table | :str: | Filepath to the theriak table.
+
+    Returns: :pandas.DataFrame:
+    '''
+    # Load the data outputted from latest theriak run.
+    df = pd.read_csv(theriak_table_file)
+    # Clean column names.
+    df.columns = [c.replace(" ","") for c in df.columns]
+    # Find then remove columns whose content sums to zero.
+    empty_cols = df.columns[df.sum()==0].to_list()
+    df.drop(empty_cols,axis=1,inplace=True)
+    return df
 
 def group_cols(df,groupings=mergers):
     ''' Row-wise summing the numerical contents of different columns into one based on a column grouping specification.
