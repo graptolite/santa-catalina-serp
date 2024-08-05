@@ -33,9 +33,13 @@ df.drop(df.columns[0],axis=1,inplace=True)
 # Transpose df and add component names back in as column headers.
 df = df.T
 df.columns = components
+
+# Save parsed df.
+df.to_csv("./local_data/df.csv")
 #+END_SRC
 
 #+RESULTS:
+: None
 * Processing the Data for PEM
 ** Isolating Relevant Columns
 For PEM, only certain element columns are of interest. Fe2O3T from the XRF analysis will be ignored in favor of FeO and Fe2O3 from the titration analysis. This also means the total from this raw data cannot be used. Water will be assumed to be the only volatile (LOI) for simplicity. A dehyrated total is also computed.
@@ -206,9 +210,17 @@ This protolith mineralogy can be found by running =theriak.exe= for each composi
 import shutil
 import os
 
+# Use theriak to regenerate data or read existing data produced by previous runs.
 force_theriak_rerun = False
 
 def find_protoliths(compositions_df,table_file_prepend=""):
+    ''' Find the protolith of all samples in a composition dataframe, returning a list of theriak output tables parsed into pandas DataFrames and storing the output tables of each sample separately in raw output format.
+
+    compositions_df | :pandas.DataFrame: | Compositions dataframe with row-wise samples.
+    table_file_prepend | :str: | How to label the output table save files.
+
+    Returns: :list: [:pandas.DataFrame:]
+    '''
     # Extract the protolith P-T from serpentinisation path.
     PT = np.array(paths["serpentinisation"])[:,:-1]
     # Initiate theriak input control class with the relevant folder path and file names.
@@ -244,12 +256,17 @@ def find_protoliths(compositions_df,table_file_prepend=""):
 # Clean composition dataframe (notably removing MnO).
 dehyd_compositions_df = PEM_df_dehyd.drop(["tot","dehyd_tot","MnO"],axis=1)
 
+# Get list of samples from compositions df.
 samples = dehyd_compositions_df.index
+
+# Declare the purpose of this PEM run.
 table_file_prepend = "protoliths-unmodified"
 
 if force_theriak_rerun:
+    # Regenerate data if theriak is to be rerun.
     dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
 else:
+    # Otherwise read data produced by the previous run.
     dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 #+END_SRC
 
@@ -259,16 +276,30 @@ To check against the expected mantle mineralogy, the phases must first be groupe
 
 #+BEGIN_SRC python :session py
 def extract_umafic_protoliths(dfs):
+    ''' Find the *ultramafic* protoliths (i.e. normalized proportions of Ol, Opx and Cpx) for all samples within a combined theriak output table.
+
+    dfs | :list: [:pandas.DataFrame:] | List of theriak output tables.
+
+    Returns: :list: [:np.array:]
+    '''
+    # Initialize list to store ultramafic protoliths.
     protoliths = []
+    # Iterate through each sample's theriak output table.
     for df in dfs:
+        # Isolate the volume/mineralogy columns.
         theriak_output = TheriakOutput(df)
         vol_df = theriak_output.extract_volumes()
+        # Group minerals into broader classifications.
         protolith = group_cols(vol_df).iloc[0]
+        # Define the necessary and only minerals for the ultramafic protolith.
         required = ["Ol","Opx","Cpx"]
+        # Extract volumes these minerals from the grouped volume columns.
         protolith_umafic = np.array([(protolith[phase] if phase in protolith else 0) for phase in required])
+        # Normalize and then save these volumes into the list.
         protoliths.append(protolith_umafic/protolith_umafic.sum())
     return protoliths
 
+# Extract protoliths for the PEM results from unmodified compositions.
 protoliths = extract_umafic_protoliths(dfs)
 #+END_SRC
 
@@ -280,7 +311,13 @@ These [cpx,opx,ol] points can then be plotted on a ternary and compared against 
 import mpltern
 import json
 
-def plot_umafic_ternary_base(ax):
+def plot_umafic_ternary_base():
+    ''' Produce the base plot for a ternary ultramafic a protolith characterization plot.
+
+    Returns: :matplotlib.Axes.axes:
+    '''
+    # Initialize ternary plot.
+    ax = plt.subplot(projection="ternary")
     # Dunite
     ax.plot([0.9,0.9],[0.1,0],[0,0.1],color="grey")
     # Lherzolite
@@ -299,28 +336,37 @@ def plot_umafic_ternary_base(ax):
     ax.set_tlabel("Ol")
     ax.set_llabel("OPX")
     ax.set_rlabel("CPX")
-    return
+    return ax
 
-def plot_umafic_ternary(compositions):
-    ax = plt.subplot(projection="ternary")
-    plot_umafic_ternary_base(ax)
+def plot_umafic_ternary(umafic_compositions):
+    ''' Plot samples from an ultramafic mineralogy df onto an ultramafic ternary plot (Ol, Opx, Cpx).
+
+    umafic_compositions | :list: [:np.array:] | List of normalized ultramafic modal mineralogy in order array([Ol, Opx, Cpx]).
+
+    Returns: :matplotlib.Axes.axes:
+    '''
+    # Create ultramafic protolith ternary plot base.
+    ax = plot_umafic_ternary_base()
+    # Load polygon definition for expected range of (MOR) mantle.
     with open("./local_data/Neumann2004_expected_mantle.json") as infile:
         NA_MOR = json.load(infile)
+    # Plot polygon for expected range.
     ax.fill(*np.array(NA_MOR).T,fc="pink",alpha=0.8,zorder=-1,label="Expected range")
+    # Plot text labels for relevant lithologies (to the expected-range polygon).
     ax.text(*[2,1,1],"Lherzolite",ha="center",va="center")
     ax.text(*[28,1,1],"Dunite",ha="center",va="center")
     ax.text(*[2,1.5,0.1],"Harzburgite",ha="center",va="center",rotation=60)
-
-    compositions = np.array(compositions)
-    Ol = compositions[:,0]
-    OPx = compositions[:,1]
-    CPx = compositions[:,2]
-    for i,P in enumerate(compositions):
+    # Cast list of mineralogy arrays to (2D) numpy array.
+    umafic_compositions = np.array(umafic_compositions)
+    # Plot each composition (row in array) onto the ternary plot as points with label for sample ID.
+    for i,P in enumerate(umafic_compositions):
         ax.plot(*P,label=samples[i],marker="*",markersize=10)
+    # Show legend for each point.
     ax.legend()
     return ax
 
 plt.figure()
+# Plot protoliths for PEM results from unmodified compositions.
 plot_umafic_ternary(protoliths)
 # plt.show()
 #+END_SRC
@@ -450,18 +496,30 @@ Applying this method to all the compositions.
 
 #+BEGIN_SRC python :session py :results output
 def find_Fe3_fractions(compositions,target_wt):
+    ''' Find an acceptable f_Fe3 value for each sample that will ensure Fe2O3 wt% equals the target_wt %.
+
+    compositions | :pandas.DataFrame: | XRF-related oxide composition dataframe with row-wise samples.
+    target_wt | Numerical | Target wt% for Fe2O3.
+
+    Returns: :dict: {"<Sample name>":<f_Fe3 value>}
+    '''
+    # Initialize dictionary to store found f_Fe3 values for different samples.
     f_Fe3_values = dict()
+    # Iterate through samples.
     for sample in compositions.index:
+        # Isolate data for each sample.
         composition = compositions.loc[sample]
         # Declare function that will map a Fe3+/FeTot fraction to Fe2O3 wt%.
         func = lambda fraction : apply_Fe3_fraction(composition,fraction)["Fe2O3"]
         # Search for a suitable Fe3+/FeTot fraction using the range halving function and accepting the default search options.
         f_Fe3 = range_halving_convergence(func,target_wt,[0,1])
+        # Store the found f_Fe3 value.
         f_Fe3_values[sample] = f_Fe3
     return f_Fe3_values
 
 # Declare target.
 Fe2O3_target = 0.1 # wt% Fe2O3
+# Find acceptable f_Fe3 values that ensure Fe2O3 wt% ~0.1 for the samples in the unmodified compositions df.
 f_Fe3_values = find_Fe3_fractions(compositions,Fe2O3_target)
 #+END_SRC
 
@@ -477,24 +535,33 @@ The tolerated $f_{Fe3}$ values for Fe2O3 wt% \approx 0.1 is near 0.01, but with 
 #+BEGIN_SRC python :session py
 force_theriak_rerun = False
 
-def correct_oxide(compositions,application_function,corrections):
+def correct_all_sample_compositions(compositions,application_function,corrections):
+    ''' Update all samples in a wt% compositions dataframe (with row-wise samples) with a function that takes a samples composition and modifies it given a value or values.
+
+    compositions | :pd.DataFrame: | Wt% compositions dataframe with row-wise samples.
+    application_function | function | Function that takes the inputs: sample oxide composition and correction object, and then modifies the composition based on the contents/value of the correction object.
+    corrections | :dict: {"<Sample name>":<correction object>} | Dictionary of correction objects suitable for input into application_function.
+    '''
     # Iterate through samples in the compositions df.
     for sample in compositions.index:
-        # Compute the corrected composition for each sample given the appropriate f_Fe3 to ensure Fe2O3 wt% ~ 0.1.
+        # Compute the corrected composition for the active sample.
         corrected_composition = application_function(compositions.loc[sample],corrections[sample])
         # Update the old composition with this corrected composition.
         compositions.loc[sample] = pd.Series(corrected_composition)
     return compositions
 
-compositions = correct_oxide(compositions,apply_Fe3_fraction,f_Fe3_values)
+# Modify the compositions by applying f_Fe3 values that were found to bring Fe2O3 wt% to 0.1.
+compositions = correct_all_sample_compositions(compositions,apply_Fe3_fraction,f_Fe3_values)
 
 # Now remove MnO.
 dehyd_compositions_df = compositions.drop(["MnO"],axis=1)
 
 table_file_prepend = "protoliths-fe-corrected"
 if force_theriak_rerun:
+    # Regenerate all protoliths data by running theriak.
     dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
 else:
+    # Load all protoliths data from previous run.
     dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 #+END_SRC
 
@@ -506,7 +573,9 @@ These protoliths can be loaded inspected on a ultramafic ternary plot again.
 
 #+BEGIN_SRC python :session py
 plt.figure()
+# Find ultramafic protolith compositions.
 fe_corr_protoliths = extract_umafic_protoliths(dfs)
+# Plot ultramafic protoliths onto an Ol-Opx-Cpx ternary.
 plot_umafic_ternary(fe_corr_protoliths)
 # plt.show()
 #+END_SRC
@@ -520,26 +589,50 @@ The SiO2 enrichment of an originally more SiO2-depleted mantle protolith is supp
 
 #+BEGIN_SRC python :session py :results output
 def modify_SiO2(composition,new_SiO2):
+    ''' Modify the SiO2 value in a dict-like composition for a single composition and then normalize the resulting composition.
+
+    composition | :dict:-like | Wt% oxide composition for a sample.
+    new_SiO2 | Numerical | SiO2 wt% to apply before renormalization to 100%.
+
+    Returns: :dict:
+    '''
+    # Cast composition to dict.
     composition = dict(composition)
+    # Update SiO2 wt%.
     composition["SiO2"] = new_SiO2
+    # Normalize all wt% values to 100%.
     composition = normalise_dict_vals(composition)
     return composition
 
 def find_SiO2_values(compositions,target_wt):
+    ''' For all samples in a compositions df (row-wise samples), find suitable pre-renormalization SiO2 wt% values that will result in the desired SiO2 wt% value *after* renormalization.
+
+    compositions | :pandas.DataFrame: | XRF-related oxide composition dataframe with row-wise samples.
+    target_wt | Numerical | Target wt% for SiO2.
+
+    Returns: :dict: {"<Sample name>":<SiO2 wt%>}
+    '''
+    # Initialize dictionary to store acceptable SiO2 wt% values.
     SiO2_values = dict()
+    # Iterate through samples.
     for sample in compositions.index:
+        # Isolate active sample's composition.
         composition = compositions.loc[sample]
-        # Declare function that will map a Fe3+/FeTot fraction to Fe2O3 wt%.
+        # Declare function that will map a pre-normalization SiO2 wt% to post-normalization SiO2 wt%.
         func = lambda SiO2 : modify_SiO2(composition,SiO2)["SiO2"]
-        # Search for a suitable Fe3+/FeTot fraction using the range halving function and accepting the default search options.
+        # Search for a suitable SiO2 wt% using the range halving function and accepting the default search options.
         SiO2 = range_halving_convergence(func,target_wt,[0,100],tolerance=0.01)
+        # Store suitable SiO2 wt%.
         SiO2_values[sample] = SiO2
     return SiO2_values
 
+# Declare target.
 SiO2_target = 44 # wt% SiO2
+# Find acceptable pre-normalization SiO2 wt% values that ensure post-normalization SiO2 wt% ~ 44.
 SiO2_values = find_SiO2_values(compositions,SiO2_target)
-compositions = correct_oxide(compositions,modify_SiO2,SiO2_values)
-
+# Modify the compositions by applying these SiO2 wt% values.
+compositions = correct_all_sample_compositions(compositions,modify_SiO2,SiO2_values)
+# Print the post SiO2 correction Fe2O3 wt% values.
 print("Fe2O3 wt%%\n%s" % compositions["Fe2O3"])
 #+END_SRC
 
@@ -562,21 +655,29 @@ Name: Fe2O3, dtype: object
 Although the SiO2 wt% is now close to 44, the Fe2O3 wt% has been modified up to +19% from 0.1 (for 06C). One way to tackle this issue would be to iteratively correct alternate oxides until the misfit on both is satisfactory.
 
 #+BEGIN_SRC python :session py
+# Declare finality conditions.
 SiO2_tolerance = 0.01
 Fe2O3_tolerance = 0.0005
 max_iter = 20
-
+# Initialize iteration counter.
 i = 0
+# Iterate as long as none of the finality conditions are not met.
 while not (all(SiO2_diff<SiO2_tolerance) and all(Fe2O3_diff<Fe2O3_tolerance)) and i < max_iter:
-    f_Fe3_values = find_Fe3_fractions(compositions,0.1)
-    compositions = correct_oxide(compositions,apply_Fe3_fraction,f_Fe3_values)
-    SiO2_values = find_SiO2_values(compositions,44)
-    compositions = correct_oxide(compositions,modify_SiO2,SiO2_values)
-
+    # Find acceptable f_Fe3 values that ensure Fe2O3 wt% ~0.1 for the samples in the unmodified compositions df.
+    f_Fe3_values = find_Fe3_fractions(compositions,Fe2O3_target)
+    # Modify the compositions by applying these f_Fe3 values.
+    compositions = correct_all_sample_compositions(compositions,apply_Fe3_fraction,f_Fe3_values)
+    # Find acceptable pre-normalization SiO2 wt% values that ensure post-normalization SiO2 wt% ~ 44.
+    SiO2_values = find_SiO2_values(compositions,SiO2_target)
+    # Modify the compositions by applying these SiO2 wt% values.
+    compositions = correct_all_sample_compositions(compositions,modify_SiO2,SiO2_values)
+    # Compute the differences between the oxides being actively corrected and their target values.
     SiO2_diff = abs(compositions["SiO2"] - SiO2_target)
     Fe2O3_diff = abs(compositions["Fe2O3"] - Fe2O3_target)
+    # Increment iteration counter.
     i += 1
 
+# Declare that acceptable compositions have been found if the composition-related finality conditions (conditions of acceptability) have been met before reaching the maximum number of iterations.
 if i != max_iter:
     print("Acceptable compositions found")
 #+END_SRC
@@ -595,12 +696,16 @@ dehyd_compositions_df = compositions.drop(["MnO"],axis=1)
 
 table_file_prepend = "protoliths-si-fe-corrected"
 if force_theriak_rerun:
+    # Regenerate data if theriak is to be rerun.
     dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
 else:
+    # Otherwise read data produced by the previous run.
     dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 
 plt.figure()
+# Find ultramafic protolith compositions.
 fe_si_corr_protoliths = extract_umafic_protoliths(dfs)
+# Plot ultramafic protoliths onto an Ol-Opx-Cpx ternary.
 plot_umafic_ternary(fe_si_corr_protoliths)
 # plt.show()
 #+END_SRC
@@ -624,7 +729,9 @@ The changes along the serpentinisation path are summarized in Table [[tab:serp-c
 The compositions of the post-serpentinisation rock require only a modification to their Fe oxidation state.
 
 #+BEGIN_SRC python :session py
-hyd_compositions_df = correct_oxide(PEM_df_hyd.drop(["dehyd_tot","tot"],axis=1),apply_Fe3_fraction,{sample:0.4 for sample in PEM_df_hyd.index})
+# Modify the non-dehydrated composition df (after removing non-oxide columns) by ensuring their f_Fe3 values are all 0.4.
+hyd_compositions_df = correct_all_sample_compositions(PEM_df_hyd.drop(["dehyd_tot","tot"],axis=1),apply_Fe3_fraction,{sample:0.4 for sample in PEM_df_hyd.index})
+# Remove MnO from compositions.
 hyd_compositions_df.drop(["MnO"],axis=1,inplace=True)
 #+END_SRC
 
@@ -652,26 +759,62 @@ The cooling path simply involves changing the P-T of modelling for a constant co
 
 #+BEGIN_SRC python :session py
 def PT_change_path(composition,TP_path,n_steps,table_file_prepend):
-    # Initialize new TheriakAPI instance, accepting the default folder/file paths. Also implicitly accept the previously-created directive file (by not creating a new one).
+    ''' Generate a PTX path file for a linear PT path with a prescribed number of intermediate steps and execute theriak on that file.
+
+    composition | :dict:-like {<Oxide>:<wt%>} | Oxide composition for one sample.
+    TP_path | :list:-like [[T0,T1],[P0,P1]] | Linear PT-path defined by start and end T and P values. Note that T precedes P.
+    n_steps | :int: | Number of steps to perform PEM at along the TP_path.
+    table_file_prepend | :str: | How to label the output table save files.
+
+    Returns: :pandas.DataFrame:
+    '''
+    # Initialize new TheriakAPI instance, accepting the default folder/file paths.
     theriak_api = TheriakAPI()
+    # Convert the dict-like composition into a theriak-domino string composition.
     composition = CompositionProcessor().theriak_domino_formula(composition)
+    # Generate commands for PEM on a linear PT path for the desired composition.
     theriak_api.add_PTX_command(composition,TP_path[1],TP_path[0],n_steps)
-    theriak_api.save_PTX_commandfile()
+    # Write both the PTX commandfile and the directive file for running this path commandfile.
+    theriak_api.save_all()
+    # Execute theriak and retrieve the output table.
     df = theriak_api.execute_theriak()
+    # Move the raw output table file to a more static location.
     shutil.move(os.path.join(theriak_api.theriak_dir,"loop_table"),
                     f"./local_data/PEM/{table_file_prepend}-loop_table")
     return df
 
 def PT_change_path_all(compositions,TP_path,n_steps,table_file_prepend):
+    ''' Perform a linear PT-path PEM for all samples in a compositions dataframe.
+
+    compositions | :pandas.DataFrame: | Compositions dataframe with row-wise samples.
+    TP_path | :list:-like [[T0,T1],[P0,P1]] | Linear PT-path defined by start and end T and P values. Note that T precedes P.
+    n_steps | :int: | Number of steps to perform PEM at along the TP_path.
+    table_file_prepend | :str: | How to label the output table save files.
+
+    Returns: :list: [:pandas.DataFrame:]
+    '''
+    # Extract sample names.
     samples = compositions.index
+    # Initialize list to hold output table dataframes.
     dfs = []
+    # Iterate through samples.
     for sample in samples:
+        # Isolate composition for active sample.
         composition = compositions.loc[sample]
+        # Execute PEM for the specified PT path for active sample and retrieve output table.
         df = PT_change_path(composition,TP_path,n_steps,table_file_prepend+f"-{sample}")
+        # Store output table.
         dfs.append(df)
     return dfs
 
 def cooling_path_all(n_steps,table_file_prepend):
+    ''' Perform a cooling-path PEM for all samples in the protolith (dehydrated) compositions dataframe.
+
+    n_steps | :int: | Number of steps to perform PEM at along the TP_path.
+    table_file_prepend | :str: | How to label the output table save files.
+
+    Returns: :list: [:pandas.DataFrame:]
+    '''
     return PT_change_path_all(dehyd_compositions_df,paths["cooling"],n_steps,table_file_prepend)
 #+END_SRC
 
@@ -681,10 +824,11 @@ def cooling_path_all(n_steps,table_file_prepend):
 force_theriak_rerun = False
 
 table_file_prepend = "cooling"
-
 if force_theriak_rerun:
+    # Regenerate data if theriak is to be rerun.
     dfs = cooling_path_all(n,table_file_prepend=table_file_prepend)
 else:
+    # Otherwise read data produced by the previous run.
     dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 #+END_SRC
 
@@ -693,7 +837,9 @@ else:
 The first output can be checked for sensibility.
 
 #+BEGIN_SRC python :session py
+# Remove previous plots from cache (important when the org version is run).
 plt.close("all")
+# Produce plots to overview the PEM output for the first sample.
 TheriakOutput(dfs[0]).characterize_output()
 plt.show()
 #+END_SRC
@@ -708,13 +854,22 @@ The cooling path also involves changing the P-T of modelling for a constant comp
 force_theriak_rerun = False
 
 def exhumation_path_all(n_steps,table_file_prepend):
+    ''' Perform an exhumation-path PEM for all samples in the final rock (hydrated) compositions dataframe.
+
+    n_steps | :int: | Number of steps to perform PEM at along the TP_path.
+    table_file_prepend | :str: | How to label the output table save files.
+
+    Returns: :list: [:pandas.DataFrame:]
+    '''
     return PT_change_path_all(hyd_compositions_df,paths["exhumation"],n_steps,table_file_prepend)
 
 table_file_prepend = "exhumation"
 
 if force_theriak_rerun:
+    # Regenerate data if theriak is to be rerun.
     dfs = exhumation_path_all(n,table_file_prepend=table_file_prepend)
 else:
+    # Otherwise read data produced by the previous run.
     dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 #+END_SRC
 
@@ -724,7 +879,9 @@ else:
 The first output can be checked for sensibility.
 
 #+BEGIN_SRC python :session py
+# Remove previous plots from cache (important when the org version is run).
 plt.close("all")
+# Produce plots to overview the PEM output for the first sample.
 TheriakOutput(dfs[0]).characterize_output()
 plt.show()
 #+END_SRC
@@ -740,18 +897,32 @@ Intermediate compositions will be treated as linear mixtures between the two end
 
 #+BEGIN_SRC python :session py
 def mix_endmembers(endmember_1,endmember_2,frac_2):
-    ''' Find the elements dictionary that represents the mixture of two components (defined by elements dictionaries), with the fraction of the second component being specified. '''
+    ''' Find the elemental composition that represents the mixture of two endmembers with a prescribed fraction of the second endmember. The elements present within endmember 2 must also be present in endmember 1 (but not strictly the opposite).
+
+    endmember_1 | :dict: {"<Element>":<amount>} | Elemental composition dictionary for endmember 1.
+    endmember_2 | :dict: {"<Element>":<amount>} | Elemental composition dictionary for endmember 2.
+    frac_2 | :float: | Fraction of endmember 2 in the mixture.
+
+    Returns: :dict: {"<Element>":<amount>}
+    '''
+    # Initialize output dict.
     out = endmember_1.copy()
+    # Iterate through the elements in the composition dictionary of endmember 1.
     for elem in endmember_1:
+        # Cast the amount of the active element from endmember 1's composition into a float.
         x1 = float(endmember_1[elem])
         if elem in endmember_2:
+            # If the element is also present in endmember 2, cast the amount of the active element from endmember 2's composition into a float.
             x2 = float(endmember_2[elem])
         else:
+            # Otherwise explicitly declare the amount of the active element in endmember 2 as zero.
             x2 = 0
+        # Compute the amount of active element in the (linear) mixture and store the result in the output composition.
         out[elem] = (x1 * (1-frac_2) + x2 * (frac_2))
     return out
 
-# First 3 coords of any of the serpentinisation paths involve increase in water to the maximum (=observed in XRF).
+# Function to set the first three values in a list on n numbers to values increasing linearly from 0 to 0.7, with the remaining values increasing linearly to 1.
+# Intended to represent the fraction of the post-serpentinisation composition in a mixture of the pre- and post-serpentinisation compositions.
 interp_coords_f = lambda n : np.append(np.linspace(0,0.7,3),
                             np.linspace(0.7,1,n-2)[1:],axis=0)
 #+END_SRC
@@ -764,18 +935,32 @@ With intermediate compositions found, the PEM can be set up. However another iss
 force_theriak_rerun = False
 
 def serpentinisation_path(sample,n_steps,table_file_prepend):
+    ''' Perform a serpentinisation-path PEM (which involves compositional change) for a single sample.
+    '''
+    # Isolate protolith composition for sample of interest.
     composition_1 = dict(dehyd_compositions_df.loc[sample])
+    # Isolate post-serpentinisation composition for sample of interest.
     composition_2 = dict(hyd_compositions_df.loc[sample])
+    # Generate list of theriak-domino composition strings representing mixtures of protolith and post-serpentinisation compositions using mixture fractions generated by interp_coords_f().
     interpolated_compositions = [CompositionProcessor().theriak_domino_formula(mix_endmembers(composition_1,composition_2,f)) for f in interp_coords_f(n_steps)]
+    # Generate list of interpolated PT points (in TP order) corresponding to the changing compositions.
     interpolated_TP = np.linspace(*np.array(paths["serpentinisation"]).T,n_steps)
 
-    # Initialize new TheriakAPI instance, accepting the default folder/file paths. Also implicitly accept the previously-created directive file (by not creating a new one).
+    # Initialize new TheriakAPI instance, accepting the default folder/file paths.
     theriak_api = TheriakAPI()
+    # Write directive file.
+    theriak_api.create_directive()
+    # Initialize list to store theriak output table.
     combined_df = []
+    # Iterate through interpolated compositions and PT points.
     for composition,TP in zip(interpolated_compositions,interpolated_TP):
+        # Ensure the PTX command set is empty.
         theriak_api.clear_PTX_commands()
+        # Generate command for a single PT point PEM for the active composition.
         theriak_api.add_PTX_command(composition,TP[1],TP[0],1)
+        # Write PTX commandfile.
         theriak_api.save_PTX_commandfile()
+        # Execute theriak and retrieve the output table.
         df = theriak_api.execute_theriak()
         # Clean the column names.
         df.columns = [c.replace(" ","") for c in df.columns]
@@ -789,18 +974,31 @@ def serpentinisation_path(sample,n_steps,table_file_prepend):
     return combined_df
 
 def serpentinisation_path_all(n_steps,table_file_prepend):
+    ''' Run the serpentinisation path PEM for all samples (implicitly from the original, unmodified composition dataframe).
+
+    n_steps | :int: | Number of steps to perform PEM at along the TP_path.
+    table_file_prepend | :str: | How to label the output table save files.
+
+    Returns: :list: [:pandas.DataFrame:]
+    '''
+    # # Extract sample names.
     samples = compositions.index
+    # Initialize list to hold output table dataframes.
     dfs = []
-    for sample in samples[2:]:
+    # Iterate through samples.
+    for sample in samples:
+        # Execute serpentinisation PEM for the active sample and retrieve the theriak output table (dataframe).
         df = serpentinisation_path(sample,n_steps,table_file_prepend)
+        # Store the theriak output table.
         dfs.append(df)
     return dfs
 
 table_file_prepend = "serpentinisation"
-
 if force_theriak_rerun:
+    # Regenerate data if theriak is to be rerun.
     dfs = serpentinisation_path_all(n,table_file_prepend=table_file_prepend)
 else:
+    # Otherwise read data produced by the previous run.
     dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
 #+END_SRC
 
@@ -809,7 +1007,9 @@ else:
 The first output can be checked for sensibility.
 
 #+BEGIN_SRC python :session py
+# Remove previous plots from cache (important when the org version is run).
 plt.close("all")
+# Produce plots to overview the PEM output for the first sample.
 TheriakOutput(dfs[0]).characterize_output()
 plt.show()
 #+END_SRC
