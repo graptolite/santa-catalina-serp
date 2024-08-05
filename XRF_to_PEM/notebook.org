@@ -314,7 +314,7 @@ import json
 def plot_umafic_ternary_base():
     ''' Produce the base plot for a ternary ultramafic a protolith characterization plot.
 
-    Returns: :matplotlib.Axes.axes:
+    Returns: :matplotlib.axes.Axes:
     '''
     # Initialize ternary plot.
     ax = plt.subplot(projection="ternary")
@@ -343,7 +343,7 @@ def plot_umafic_ternary(umafic_compositions):
 
     umafic_compositions | :list: [:np.array:] | List of normalized ultramafic modal mineralogy in order array([Ol, Opx, Cpx]).
 
-    Returns: :matplotlib.Axes.axes:
+    Returns: :matplotlib.axes.Axes:
     '''
     # Create ultramafic protolith ternary plot base.
     ax = plot_umafic_ternary_base()
