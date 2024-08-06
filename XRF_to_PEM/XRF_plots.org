@@ -3,3 +3,255 @@
 # NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
 
 #+TITLE: XRF Compositional Data Analysis
+* Introduction
+Various compositional plots can be produced using the bulk rock compositional data to characterise the rocks, including 3-component ternary plots, PCA plots and biplots.
+* Data
+This notebook requires =notebook.org= to have been previously run such that =./local_data/df.csv= (full dataframe) =./local_data/cleaned_normalized_df.csv= (normalized to 100% when LOI is considered) exists.
+
+#+BEGIN_SRC python :session py
+import pandas as pd
+
+# Load composition data.
+df = pd.read_csv("./local_data/df.csv",index_col=0)
+oxide_df = pd.read_csv("./local_data/cleaned_normalized_df.csv",index_col=0)
+
+# Get list of samples.
+samples = df.index
+#+END_SRC
+
+#+RESULTS:
+* Oxide Component Plots
+Differences between the rocks can be investigated using plots of major/characteristic oxide components (that may be combined). The two oxide sets that are plotted to characterize the rock igneous protolithare:
+- AFM - total alkali, total Fe, MgO (after the AFM plot which is used to characterize metamorphic rocks)
+- Si-Fe-Mg oxides - SiO2, total Fe, MgO (the most abundant oxides)
+
+Total Fe will be computed from titration-derived Fe-oxides.
+
+#+BEGIN_SRC python :session py
+import numpy as np
+import matplotlib.pyplot as plt
+import mpltern
+
+# Compute the combined oxides for plotting.
+oxide_df["FeTot"] = df["FeO"] + 0.9*df["Fe2O3"]
+oxide_df["Alkalis"] = df["Na2O"] + df["K2O"]
+#+END_SRC
+
+#+RESULTS:
+
+** AFM
+#+BEGIN_SRC python :session py
+def plot_ternary_composition(ternary_df):
+    ''' Plot sample compositions described by 3-components onto a ternary plot.
+
+    ternary_df | :pandas.DataFrame: | Dataframe of sample compositions described by 3 components, with the index comprising sample names. This dataframe doesn't need to be normalized.
+
+    Returns: :matplotlib.axes.Axes:
+    '''
+    # Normalize the ternary df columns to 100 wt% (i.e. 1).
+    ternary_df = ternary_df.div(ternary_df.sum(axis=1),axis=0)
+    # Use new figure.
+    plt.figure()
+    # Initialize ternary plot.
+    ax = plt.subplot(projection="ternary")
+    # Iterate through the samples in the ternary composition df and plot their AFM composition data.
+    for name,data in ternary_df.iterrows():
+        ax.plot(*data,label=name,marker="*",markersize=10)
+    return ax
+
+
+# Isolate columns for AFM plotting (in the correct order).
+df_afm = oxide_df[["Alkalis","FeTot","MgO"]]
+# Plot AFM points onto a ternary.
+ax = plot_ternary_composition(df_afm)
+# Label vertices.
+ax.set_tlabel("A (Na2O + K2O)")
+ax.set_llabel("F (FeO + 0.9Fe2O3)")
+ax.set_rlabel("M (MgO)")
+# Show legend.
+plt.legend()
+#+END_SRC
+
+#+RESULTS:
+: Legend
+
+The points all have very low total Alkali content and cluster together, which makes interpretation difficult.
+
+** Si-Fe-Mg Oxides
+#+BEGIN_SRC python :session py
+# Isolate columns for FMS plotting (in the correct order).
+df_sfm = oxide_df[["SiO2","FeTot","MgO"]]
+# Plot AFM points onto a ternary.
+ax = plot_ternary_composition(df_sfm)
+# Label vertices.
+ax.set_tlabel("S (SiO2)")
+ax.set_llabel("F (FeO + 0.9Fe2O3)")
+ax.set_rlabel("M (MgO)")
+# Show legend.
+plt.legend()
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+The points have significant amounts of each vertex component, but are still clustered together and so not easy to interpret. However, it appears that 06C is much more SiO2 enriched compared to the others.
+
+* PCA plots
+PCA plots will reduce clustering and also permit interpretation of outliers after considering background scatter within the data (i.e. an outlier in composition space based on high component X may not be an outlier in PCA space if the /scatter of component X is high/ in the dataset). Since the data for PCA is compositional, standard PCA isn't the best approach. Instead, a "robust" approach implemented in =robCompositions= \citep{Templ2011} is used. This implementation is written in the R language only (with no Python equivalent), so the PCA plotting code will be written in R.
+
+The installation of =robCompositions= may face a number of hurdles:
+- =cmake= (installable system package) is a prerequisite
+- =curl-config= (system command) is a prerequisite and may be found in the installable system package =libcurl4-gnutls-dev=
+
+07A is found to be compositionally distinct from the other samples, which cluster together. The lack of 06C uniqueness suggested by the SFM ternary plot is likely due to its high SiO2 being accounted for by the large spread of SiO2 values in the sample collection.
+* Benard et al. 2021 biplots - WARNING: POTENTIAL LICENSING ISSUES
+Geochemical biplots of one oxide against another was used by \cite{Benard2021} to differentiate between mantle from different geological settings. The plots from \cite{Benard2021} (*which are licensed under CC BY-NC-ND so these derivatives can't be published?*) were first manually extracted from the article PDF, converted to SVG format. Computer readability was enhanced by ungrouping all objects, tracing each axis with a single SVG rectangle object (and making sure no other rectangle objects were present), and then grouping the contents of each axis. The axes rectange definitions are extracted for use in matplotlib plot sizing.
+
+#+BEGIN_SRC python :session py
+from svg_parsing import *
+parent_svgfile = "./local_data/Benard2021_enhanced.svg"
+n_cols = 3
+svg = parse_svg(parent_svgfile)
+groups = find_tag("g",svg,False)
+# Check if a top level group exists (i.e. a single group encompassing lower level groups).
+if len(groups) == 1:
+    groups = find_tag("g",groups[0],False)
+rect_defs = [parse_rect(find_tag("rect",group)[0]) for group in groups]
+grid_sorter = gridify(rect_defs,n_cols)
+ordered_groups = [groups[i] for i in grid_sorter]
+ordered_rects = [rect_defs[i] for i in grid_sorter]
+#+END_SRC
+
+#+RESULTS:
+
+LOI (H2O) is ignored since the plots are for the nominally anhydrous mantle. The FeTot (vs Al2O3) plot is skipped in batch plotting since most of the Fe values plot outside range. Instead, the FeTot range and plot height are doubled.
+
+#+BEGIN_SRC python :session py
+import matplotlib as mpl
+import os
+
+# Hardcoding of plotting specifications.
+# Which oxides to plot against each other (y var,x var).
+plot_order = [("FeTot","Al2O3"),("SiO2","Al2O3"),("SiO2","MgO"),
+              ("TiO2","MgO"),("Al2O3","MgO"),("MnO","MgO")]
+# Axes ranges (y var range,x var range) to match those of Benard et al 2021.
+plot_limits = [([6,9],[0,4.5]),([40,46],[0,4.5]),([40,46],[36,50]),
+               ([0,0.2],[36,50]),([0,4.5],[36,50]),([0.05,0.2],[36,50])]
+
+class PlotOxides():
+    def __init__(self,df):
+        df = self.correct_silica(df)
+        df["FeTot"] = 0.9 * df["Fe2O3"] + df["FeO"]
+        self.use_df = df
+
+    def correct_silica(self,df,expected=44,tolerance=0.01,max_iter=50):
+        # Correct post-normalization silica wt% to 44 wt% to permit comparison of other wt% to Benard et al 2021.
+        # Only the silica correction is performed since effective FeO_Tot is unaffected by Fe oxidation state.
+        non_silica_df = df[df.columns.drop("SiO2")]
+        non_silica_sum = non_silica_df.sum(axis=1)
+        expected_non_silica_sum = 100 - expected
+        non_silica_df = non_silica_df.mul(expected_non_silica_sum/non_silica_sum,axis=0)
+        non_silica_df["SiO2"] = 44
+        return non_silica_df
+
+    def scatter(self,x_oxide,y_oxide,xlim,ylim,figsize_pt,savefig=False):
+        use_df = self.use_df
+        samples = use_df.index
+        N = len(samples)
+        cmap = mpl.colormaps["tab10"]
+        pt = 1/72
+        fig,ax = plt.subplots(figsize=(figsize_pt[0]*pt,figsize_pt[1]*pt),tight_layout={"pad":0})
+        [ax.scatter(use_df.iloc[i][x_oxide],use_df.iloc[i][y_oxide],color=cmap(i),s=15,edgecolors="k",label=samples[i]) for i in range(N)]
+        ax.set_xlabel(x_oxide)
+        ax.set_ylabel(y_oxide)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        ax.legend(prop={"size":5})
+        if savefig:
+            plt.axis("off")
+            plt.savefig(f"{y_oxide}-vs-{x_oxide}.svg",bbox_inches=0,pad_inches=0,transparent=True)
+        return ax
+
+cleaned_df = oxide_df.drop(["dehyd_tot","Alkalis","FeTot","H2O"],axis=1)
+cleaned_df = cleaned_df.div(cleaned_df.sum(axis=1),axis=0)*100
+
+os.chdir("/home/generic/UW-OX-USA/Py-notebooks/XRF_to_PEM/")
+if not os.path.exists("tmp"):
+    os.mkdir("tmp")
+os.chdir("tmp")
+plt.close("all")
+plot_oxides = PlotOxides(cleaned_df)
+bottom_left_corners = []
+for i,(rect,plot_vars,plot_limit) in enumerate(zip(ordered_rects,plot_order,plot_limits)):
+    pt_dimension = np.array([rect["width"],rect["height"]])
+    if i == 0:
+        # Overheight for first plot (i.e. where y var is FeTot).
+        vertical_upscale = 2
+        pt_dimension[1] = pt_dimension[1] * vertical_upscale
+        # Increase vertical scale by moving up the upper y limit.
+        plot_limit[0][1] += (vertical_upscale-1) * (plot_limit[0][1]-plot_limit[0][0])
+    plot_oxides.scatter(plot_vars[1],plot_vars[0],plot_limit[1],plot_limit[0],pt_dimension,True)
+    bottom_left_corners.append((rect["x"],rect["y"]+(rect["height"]-pt_dimension[1])))
+
+os.chdir("../")
+#+END_SRC
+
+#+RESULTS:
+: None
+
+The plots are then placed onto the parent figure using nested svg transformations combined with alignment of the bottom left corner.
+
+#+BEGIN_SRC python :session py
+def find_tag_nestable(tag,svg):
+    ''' Find the highest level tag and contents where the contents may contain nested tags of the same type.
+
+    tag | :str: | Name of the tag to search for.
+
+    Returns :list: [:str:]
+    '''
+    tag_opens = [m.start() for m in re.finditer(f"<{tag}",svg)]
+    opens = ["o"] * len(tag_opens)
+    tag_closes = [m.end() for m in re.finditer(f"</{tag}>",svg)]
+    closes = ["c"] * len(tag_closes)
+
+    tag_positions = tag_opens + tag_closes
+    tag_operations = opens + closes
+
+    sorted_positions,sorted_operations = zip(*sorted(zip(tag_positions,tag_operations)))
+
+    level = 0
+    for pos,op in zip(sorted_positions,sorted_operations):
+        # If the tag is an opening tag, increase the level by 1.
+        # This is the operation of the first tag.
+        if op=="o":
+            level += 1
+        else:
+            # Otherwise the tag is a closing tag, so reduce the level by 1.
+            level -= 1
+        # Find the tag that closes (by returning the level to zero) the first/opening tag.
+        if level == 0:
+            closure_pos = pos
+            break
+
+    full_tag = svg[tag_opens[0]:closure_pos]
+    return full_tag
+
+with open(parent_svgfile) as infile:
+    parent_svg = infile.read()
+
+for bottom_left_corner,plot_vars,group in zip(bottom_left_corners,plot_order,ordered_groups):
+    svg_file = "./tmp/%s-vs-%s.svg" % plot_vars
+    svg = parse_svg(svg_file)
+    parent_group = find_tag_nestable("g",svg)
+    parent_group = '<svg x="%s" y="%s">\n' % bottom_left_corner + parent_group + "\n</svg>"
+    parent_svg = parent_svg.replace(group,group.replace("</g>",parent_group+"\n</g>"))
+    print(len(parent_group),len(parent_svg))
+
+with open("./tmp/output.svg","w") as outfile:
+    outfile.write(parent_svg)
+#+END_SRC
+
+#+RESULTS:
+
+[[./tmp/output.svg]]
