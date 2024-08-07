@@ -1,0 +1,84 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; org-confirm-babel-evaluate: nil; -*-
+# NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
+# NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
+
+#+TITLE: XRF Compositional Data Analysis - PCA Plots (R)
+
+* PCA plots
+PCA plots will reduce clustering and also permit interpretation of outliers after considering background scatter within the data (i.e. an outlier in composition space based on high component X may not be an outlier in PCA space if the /scatter of component X is high/ in the dataset). Since the data for PCA is compositional, standard PCA isn't the best approach. Instead, a "robust" approach implemented in =robCompositions= \citep{Templ2011} is used. This implementation is written in the R language only (with no Python equivalent), so the PCA plotting code will be written in R.
+
+The installation of =robCompositions= may face a number of hurdles:
+- =cmake= (installable system package) is a prerequisite
+- =curl-config= (system command) is a prerequisite and may be found in the installable system package =libcurl4-gnutls-dev=
+
+
+#+BEGIN_SRC R :session r
+library(robCompositions)
+library(dplyr)
+
+extract_cols <- function(dataf,cols){
+  #' Isolate columns from a dataframe by removing all other columns.
+  #'
+  #' dataf | :data.frame: | Dataframe with a set of columns that encompasses those in cols.
+  #' cols | :chr: vector | List of column names to isolate.
+  #'
+  #' Returns: :data.frame:
+  ## Set all columns to NULL except those to keep.
+  dataf[,setdiff(colnames(dataf),cols)] <- NULL
+  return(dataf)
+}
+
+renormalise_extract_cols <- function(dataf,cols){
+  #' Isolate desired columns from a composition dataframe and renormalize the isolated columns to row-wise sum to 1.
+  #'
+  #' dataf | :data.frame: | Dataframe with a set of columns that encompasses those in cols.
+  #' cols | :chr: vector | List of column names to isolate.
+  #'
+  #' Returns: :data.frame:
+  ## Isolate the desired columns.
+  dataf <- extract_cols(dataf,cols)
+  ## Renormalize row totals to 1 (via row_1_col_1/sum(row_1)).
+  dataf <- dataf %>% ungroup %>% mutate(across(everything())/rowSums(across(everything())))
+  return(dataf)
+}
+
+PCA_compositions <- function(dataf,keep_only=c("SiO2","MgO","FeO","Fe2O3"),legend_loc="topleft"){
+  #' Perform PCA on selected components within a composition dataframe, and produce a plot of the results (PC1 vs PC2).
+  #' Note: To avoid the error of ridiculousness ("n <= p -- you can't be serious!"), need to get rid of columns until there's (n_samples-1) left. Even 4 variable components for 5 samples is a bit low...
+  #'
+  #' dataf | :data.frame: | Composition dataframe with row-wise samples and sample names as rownames.
+  #' keep_only | :chr: vector | Components in the composition dataframe to isolate and perform PCA on.
+  #' legend_loc | :chr: | Location to place the legend (passed to the legend() function).
+  #'
+  #' Returns: :List:
+  ## Extract components (columns) of interest and renormalize.
+  ## Renormalisation may not be too necessary since outCoDa appears to perform this closure operation anyway but good to include for completeness/certainty.
+  dataf <- renormalise_extract_cols(dataf,keep_only)
+  ## Perform PCA with default method="robust".
+  pca_res <- pcaCoDa(dataf)
+  ## Produce biplot of the PCA results.
+  biplot(pca_res)
+  ## Add legend to plot, which matches the points (as numbers) to sample name (from the composition dataframe rownames).
+  legend(x=legend_loc,bty="n",
+         legend=paste(1:dim(dataf)[1],rownames(dataf)),
+         text.col="blue")
+  return(pca_res)
+}
+
+## Load composition data.
+compositions = "./local_data/cleaned_normalized_df.csv"
+dataf <- read.csv(compositions,header=TRUE,row.names=1)
+## Compute derived components (FeTot and Alkalis)
+dataf$FeTot <- 0.9*dataf$Fe2O3 + dataf$FeO
+dataf$Alkalis <- dataf$Na2O + dataf$K2O
+## Perform PCA on AFM.
+PCA_compositions(dataf,keep_only=c("Alkalis","FeTot","MgO"))
+## Initialize new figure.
+dev.new()
+## Perform PCA on SFM.
+PCA_compositions(dataf,keep_only=c("SiO2","FeTot","MgO"))
+#+END_SRC
+
+#+RESULTS:
+
+07A is found to be compositionally distinct from the other samples, which cluster together. The lack of 06C uniqueness suggested by the SFM ternary plot is likely due to its high SiO2 being accounted for by the large spread of SiO2 values in the sample collection.

@@ -97,39 +97,40 @@ plt.show()
 
 The points have significant amounts of each vertex component, but are still clustered together and so not easy to interpret. However, it appears that 06C is much more SiO2 enriched compared to the others.
 
-* PCA plots
-PCA plots will reduce clustering and also permit interpretation of outliers after considering background scatter within the data (i.e. an outlier in composition space based on high component X may not be an outlier in PCA space if the /scatter of component X is high/ in the dataset). Since the data for PCA is compositional, standard PCA isn't the best approach. Instead, a "robust" approach implemented in =robCompositions= \citep{Templ2011} is used. This implementation is written in the R language only (with no Python equivalent), so the PCA plotting code will be written in R.
-
-The installation of =robCompositions= may face a number of hurdles:
-- =cmake= (installable system package) is a prerequisite
-- =curl-config= (system command) is a prerequisite and may be found in the installable system package =libcurl4-gnutls-dev=
-
-07A is found to be compositionally distinct from the other samples, which cluster together. The lack of 06C uniqueness suggested by the SFM ternary plot is likely due to its high SiO2 being accounted for by the large spread of SiO2 values in the sample collection.
+See =XRF-PCA.org/.ipynb= for PCA analysis (separate notebook to avoid mixing languages/kernels), where outliers are easier to see.
 * Benard et al. 2021 biplots - WARNING: POTENTIAL LICENSING ISSUES
 Geochemical biplots of one oxide against another was used by \cite{Benard2021} to differentiate between mantle from different geological settings. The plots from \cite{Benard2021} (*which are licensed under CC BY-NC-ND so these derivatives can't be published?*) were first manually extracted from the article PDF, converted to SVG format. Computer readability was enhanced by ungrouping all objects, tracing each axis with a single SVG rectangle object (and making sure no other rectangle objects were present), and then grouping the contents of each axis. The axes rectange definitions are extracted for use in matplotlib plot sizing.
 
 #+BEGIN_SRC python :session py
 from svg_parsing import *
+# Declare the filepath to the enhanced SVG file (in the manner described above).
 parent_svgfile = "./local_data/Benard2021_enhanced.svg"
+# Declare the number of plot columns present in the SVG file (plot collection).
 n_cols = 3
+# Read the SVG file into a string.
 svg = parse_svg(parent_svgfile)
-groups = find_tag("g",svg,False)
-# Check if a top level group exists (i.e. a single group encompassing lower level groups).
-if len(groups) == 1:
-    groups = find_tag("g",groups[0],False)
+# Find plot groups from the SVG file (where the groups structure has been curated such that the following code works).
+parent_group = find_tag_nestable("g",svg.replace(find_tag("defs",svg,False)[0],""))
+parent_group = parent_group.replace(re.search("<g[\s\S]*?>",parent_group).group(0),"")
+groups = find_tag("g",parent_group,False)
+# Extract information on the manually-draw axes rectangles.
 rect_defs = [parse_rect(find_tag("rect",group)[0]) for group in groups]
+# Generate index order that sorts the rectangles row-wise then column-wise (i.e. grid ordering).
 grid_sorter = gridify(rect_defs,n_cols)
+# Grid order the plot groups and axes rectangles.
 ordered_groups = [groups[i] for i in grid_sorter]
 ordered_rects = [rect_defs[i] for i in grid_sorter]
 #+END_SRC
 
 #+RESULTS:
 
-LOI (H2O) is ignored since the plots are for the nominally anhydrous mantle. The FeTot (vs Al2O3) plot is skipped in batch plotting since most of the Fe values plot outside range. Instead, the FeTot range and plot height are doubled.
+LOI (H2O) is ignored since the plots are for the nominally anhydrous mantle. The FeTot (vs Al2O3) plot is skipped in batch plotting since most of the Fe values plot outside range. Instead, the FeTot range and plot height are doubled (which can be seen on the SVG output but not the converted PNG output that's displayed by this notebook).
+- Note: the following code block is quite specific to this Benard et al 2021 comparison.
 
 #+BEGIN_SRC python :session py
 import matplotlib as mpl
 import os
+from io import BytesIO
 
 # Hardcoding of plotting specifications.
 # Which oxides to plot against each other (y var,x var).
@@ -139,62 +140,106 @@ plot_order = [("FeTot","Al2O3"),("SiO2","Al2O3"),("SiO2","MgO"),
 plot_limits = [([6,9],[0,4.5]),([40,46],[0,4.5]),([40,46],[36,50]),
                ([0,0.2],[36,50]),([0,4.5],[36,50]),([0.05,0.2],[36,50])]
 
+# Class specific to plotting comparisons to Benard et al 2021.
 class PlotOxides():
     def __init__(self,df):
+        # Correct post-normalization silica wt% to 44 wt% to permit comparison of these wt% to Benard et al 2021.
         df = self.correct_silica(df)
+        # Compute the total Fe as defined by AFM.
         df["FeTot"] = 0.9 * df["Fe2O3"] + df["FeO"]
         self.use_df = df
 
-    def correct_silica(self,df,expected=44,tolerance=0.01,max_iter=50):
-        # Correct post-normalization silica wt% to 44 wt% to permit comparison of other wt% to Benard et al 2021.
+    def correct_silica(self,df,expected=44):
+        ''' Correct only the SiO2 column in a composition dataframe to match a prescribed SiO2 wt%. This is done by setting the total of other components to 100 wt% - SiO2 wt% and renormalizing those other columns to that (sub)total.
+
+        df | :pandas.Dataframe: | Composition dataframe with row-wise samples. Must contain only components of interest.
+        expected | Numerical | Prescribed SiO2 wt%.
+
+        Returns: :pandas.Dataframe:
+        '''
         # Only the silica correction is performed since effective FeO_Tot is unaffected by Fe oxidation state.
         non_silica_df = df[df.columns.drop("SiO2")]
+        # Compute the current sample-wise sums of components other than SiO2.
         non_silica_sum = non_silica_df.sum(axis=1)
+        # Compute the expected sample-wise sum of components other than SiO2.
         expected_non_silica_sum = 100 - expected
+        # Normalize the sample-wise sum of non-SiO2 components to expected by multiplying each cell by expected/observed sum.
         non_silica_df = non_silica_df.mul(expected_non_silica_sum/non_silica_sum,axis=0)
-        non_silica_df["SiO2"] = 44
+        # Set SiO2 wt% to expected.
+        non_silica_df["SiO2"] = expected
         return non_silica_df
 
-    def scatter(self,x_oxide,y_oxide,xlim,ylim,figsize_pt,savefig=False):
+    def scatter(self,x_oxide,y_oxide,xlim,ylim,figsize_pt,savefig=None):
+        ''' Scatterplot one oxide against another with specified plot dimensions for saving.
+
+        x_oxide | :str: | Name of the oxide for the x axis.
+        y_oxide | :str: | Name of the oxide for the y axis.
+        xlim | :list:-like [<x lower>,<x upper>] | X limit specification.
+        ylim | :list:-like [<y lower>,<y upper>] | Y limit specification.
+        figsize_pt | :list:-like [<width>,<height>] | Size of the plot in pt.
+        savefig | :str: or :BytesIO: | SVG filename or BytesIO to save the figure output into. The figure will be saved without axes or margins.
+
+        Returns: :matplotlib.axes.Axes:
+        '''
         use_df = self.use_df
+        # Extract list of samples from the composition dataframe.
         samples = use_df.index
-        N = len(samples)
+        # Get the number of samples.
         cmap = mpl.colormaps["tab10"]
+        # pt to inches conversion.
         pt = 1/72
+        # Initialize figure with prescribed figure size (where figsize is in inches, converted from pt).
         fig,ax = plt.subplots(figsize=(figsize_pt[0]*pt,figsize_pt[1]*pt),tight_layout={"pad":0})
-        [ax.scatter(use_df.iloc[i][x_oxide],use_df.iloc[i][y_oxide],color=cmap(i),s=15,edgecolors="k",label=samples[i]) for i in range(N)]
-        ax.set_xlabel(x_oxide)
-        ax.set_ylabel(y_oxide)
+        # Plot each sample's relevant composition as a point onto the figure.
+        for i,(sample,row) in enumerate(use_df.iterrows()):
+            ax.scatter(row[x_oxide],row[y_oxide],color=cmap(i),s=15,edgecolors="k",label=sample)
+        # Set x and y axis limits.
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
+        # Add (small) legend.
         ax.legend(prop={"size":5})
-        if savefig:
+        if savefig is not None:
+            # Save the figure in SVG format without an axis if requested.
             plt.axis("off")
-            plt.savefig(f"{y_oxide}-vs-{x_oxide}.svg",bbox_inches=0,pad_inches=0,transparent=True)
+            plt.savefig(savefig,bbox_inches=0,pad_inches=0,transparent=True,format="svg")
         return ax
 
+# Remove irrelevant columns (for comparison to Benard et al 2021) from the oxide composition dataframe.
 cleaned_df = oxide_df.drop(["dehyd_tot","Alkalis","FeTot","H2O"],axis=1)
+# Renormalize remaining columns to 100 wt%.
 cleaned_df = cleaned_df.div(cleaned_df.sum(axis=1),axis=0)*100
-
-os.chdir("/home/generic/UW-OX-USA/Py-notebooks/XRF_to_PEM/")
-if not os.path.exists("tmp"):
-    os.mkdir("tmp")
-os.chdir("tmp")
+# Close all previous plots (to avoid plot accumulation).
 plt.close("all")
+# Initialize specific plotting instance.
 plot_oxides = PlotOxides(cleaned_df)
+# Initialize list to store the bottom left corner positions (in pt) of axes from the parent SVG file.
 bottom_left_corners = []
+# Initialize list to store the BytesIO instances into which the plots are saved (to memory and not disk).
+fig_svgs = []
+# Iterate through each axis in the parent SVG file.
 for i,(rect,plot_vars,plot_limit) in enumerate(zip(ordered_rects,plot_order,plot_limits)):
+    # Initialize a BytesIO instance into which the plot can be saved.
+    fig_svg = BytesIO()
+    # Identify the dimensions of the axes.
     pt_dimension = np.array([rect["width"],rect["height"]])
+    # Check if the plot is the first plot, where y var is FeTot.
     if i == 0:
-        # Overheight for first plot (i.e. where y var is FeTot).
+        # Increase the upper y axis limit for the first FeTot plot beyond the limit specified by Benard et al 2021.
+        # Do this by doubling the vertical range (without changing the lower y axis limit).
         vertical_upscale = 2
+        # Increase y axis height.
         pt_dimension[1] = pt_dimension[1] * vertical_upscale
-        # Increase vertical scale by moving up the upper y limit.
+        # Moving up the upper y limit.
         plot_limit[0][1] += (vertical_upscale-1) * (plot_limit[0][1]-plot_limit[0][0])
-    plot_oxides.scatter(plot_vars[1],plot_vars[0],plot_limit[1],plot_limit[0],pt_dimension,True)
+    # Produce and save (to BytesIO) a scatter plot of the active oxide pair.
+    plot_oxides.scatter(plot_vars[1],plot_vars[0],plot_limit[1],plot_limit[0],pt_dimension,fig_svg)
+    # Compute and store the bottom left corner position of the active plot.
     bottom_left_corners.append((rect["x"],rect["y"]+(rect["height"]-pt_dimension[1])))
+    # Store the "saved" figure.
+    fig_svgs.append(fig_svg)
 
-os.chdir("../")
+# Prevent plot display.
+plt.close("all")
 #+END_SRC
 
 #+RESULTS:
@@ -203,55 +248,37 @@ os.chdir("../")
 The plots are then placed onto the parent figure using nested svg transformations combined with alignment of the bottom left corner.
 
 #+BEGIN_SRC python :session py
-def find_tag_nestable(tag,svg):
-    ''' Find the highest level tag and contents where the contents may contain nested tags of the same type.
-
-    tag | :str: | Name of the tag to search for.
-
-    Returns :list: [:str:]
-    '''
-    tag_opens = [m.start() for m in re.finditer(f"<{tag}",svg)]
-    opens = ["o"] * len(tag_opens)
-    tag_closes = [m.end() for m in re.finditer(f"</{tag}>",svg)]
-    closes = ["c"] * len(tag_closes)
-
-    tag_positions = tag_opens + tag_closes
-    tag_operations = opens + closes
-
-    sorted_positions,sorted_operations = zip(*sorted(zip(tag_positions,tag_operations)))
-
-    level = 0
-    for pos,op in zip(sorted_positions,sorted_operations):
-        # If the tag is an opening tag, increase the level by 1.
-        # This is the operation of the first tag.
-        if op=="o":
-            level += 1
-        else:
-            # Otherwise the tag is a closing tag, so reduce the level by 1.
-            level -= 1
-        # Find the tag that closes (by returning the level to zero) the first/opening tag.
-        if level == 0:
-            closure_pos = pos
-            break
-
-    full_tag = svg[tag_opens[0]:closure_pos]
-    return full_tag
-
+# Read the parent SVG file as string.
 with open(parent_svgfile) as infile:
     parent_svg = infile.read()
-
-for bottom_left_corner,plot_vars,group in zip(bottom_left_corners,plot_order,ordered_groups):
-    svg_file = "./tmp/%s-vs-%s.svg" % plot_vars
-    svg = parse_svg(svg_file)
+# Iterate through the plots produced using observed data.
+for bottom_left_corner,fig_svg_io,group in zip(bottom_left_corners,fig_svgs,ordered_groups):
+    # Read the active BytesIO plot "save" into string (assuming utf-8 encoding).
+    fig_svg_io.seek(0)
+    svg = fig_svg_io.read().decode("utf-8")
+    # Find the group that encompasses the entire saved plot.
     parent_group = find_tag_nestable("g",svg)
+    # Wrap this plot group within an svg tag whose bottom-left corner matches that of the relevant axis in the parent SVG.
     parent_group = '<svg x="%s" y="%s">\n' % bottom_left_corner + parent_group + "\n</svg>"
+    # Add the plot group to the parent SVG.
     parent_svg = parent_svg.replace(group,group.replace("</g>",parent_group+"\n</g>"))
-    print(len(parent_group),len(parent_svg))
 
-with open("./tmp/output.svg","w") as outfile:
+# Save the updated parent SVG (i.e. after plots using observed data have been overlain on the parent SVG axes).
+out_svg = "./imgs/Benard2021_plotted.svg"
+with open(out_svg,"w") as outfile:
     outfile.write(parent_svg)
+
+# Convert the output SVG to PNG for display (nested <svg>s appear to not be supported by IPython.display.SVG so cannot use that).
+import subprocess
+png_file = out_svg+".png"
+subprocess.call(["inkscape",out_svg,"-o",png_file],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+
+from IPython.display import Image
+Image(filename=png_file)
 #+END_SRC
 
 #+RESULTS:
+: <IPython.core.display.Image object>
 
-[[./tmp/output.svg]]
+
+These plots reveal that the sample compositions are broadly consistent with an abyssal mantle source, with the notable exception of 07A, which is more consistent with an off-craton mantle source. The outlier nature of 07A is consistent with the PCA plots.
