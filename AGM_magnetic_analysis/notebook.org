@@ -1,0 +1,308 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; org-confirm-babel-evaluate: nil; -*-
+# NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
+# NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
+
+#+TITLE: Fabric Orientation in 06C
+* Introduction
+Hysteresis loops, demagnetization curves and first order reversal curve collections were measured on an AGM at Cambridge. This dataset can be used to infer the different types of magnetic domain states within a rock through the production of plots:
+- Day Plots \citep{Day1977} - bulk domain state
+- FORC Diagrams (e.g. \cite{Roberts2014} - characteristic domain state contents (may contain more than one)
+* Day Plots
+Day Plots are scatterplots of $H_{cr}/H_c$ against $M_{rs}/M_s$ where $H_{cr}$ is the coercivity of remanence, $H_c$ is the coercivity, $M_{rs}$ is the remanent saturation magnetization, and $M_s$ is the saturation magnetization.
+
+Hysteresis loop measurements provide $M_s$ and $H_c$ (as long as the peak applied field is strong enough to reach saturation magnetization), and DC demagnetization measurements provide $M_{rs}$ and $H_{cr}$. This data can be read from .hys and .dcd files respectively. Coercivity is in the units Tesla and remanence is in the units Am^2.
+
+#+BEGIN_SRC python :session py :results output
+import re
+import codecs
+import os
+
+data_path = "../DATASETS/AGM/"
+
+files = os.listdir(data_path)
+samples = sorted(set([f.split("-")[0] for f in files if f.endswith(".dcd") or f.endswith(".hys")]))
+
+def extract_hys_params(hys_file):
+    with codecs.open(hys_file,encoding="utf-8",errors="ignore") as infile:
+        data = infile.read()
+        M_s = re.search("Saturation  \s+(.+?)\s",data).group(1)
+        H_c = re.search("Coercivity  \s+(.+?)\s",data).group(1)
+    return {"Ms":float(M_s),
+            "Hc":float(H_c)}
+
+def extract_dcd_params(dcd_file):
+    with codecs.open(dcd_file,encoding="utf-8",errors="ignore") as infile:
+        data = infile.read()
+        M_rs = re.search("Remanence  \s+(.+?)\s",data).group(1)
+        H_cr = re.search("Coercivity \(remanent\)  \s+(.+?)\s",data).group(1)
+    return {"Mrs":float(M_rs),
+            "Hcr":float(H_cr)}
+
+print("Example for sample M02 (H /T; M /Am^2):")
+print(extract_hys_params(os.path.join(data_path,"M02.i-2T.hys")))
+print(extract_dcd_params(os.path.join(data_path,"M02.i-1T.dcd")))
+#+END_SRC
+
+#+RESULTS:
+: Example for sample M02 (H /T; M /Am^2):
+: {'Ms': 13.58026, 'Hc': 0.01541676}
+: {'Mrs': 2.614374, 'Hcr': 0.03023966}
+
+This process can be repeated for all samples (with maximum applied field of 2T for the hysteresis loops), and the x and y variables computed then scatterplotted. The points are colored by the degree of serpentinization where an observation was made.
+
+#+BEGIN_SRC python :session py
+import sys
+# Import observed degree of serpentinization and colormapping data.
+sys.path.insert(0,"../DATASETS/SERP")
+from sample_serp import serp,cmap
+
+import matplotlib.pyplot as plt
+
+plt.figure()
+for sample in samples:
+    max_hys_loop_f = sorted([f for f in files if ("2T" in f) and (f"{sample}-" in f) and f.endswith(".hys")])[0]
+    dcd_f = sorted([f for f in files if sample in f and f.endswith(".dcd")])[0]
+    print(sample,max_hys_loop_f,dcd_f)
+    hys_data = extract_hys_params(os.path.join(data_path,max_hys_loop_f))
+    dcd_data = extract_dcd_params(os.path.join(data_path,dcd_f))
+    M_s,H_c = hys_data["Ms"],hys_data["Hc"]
+    M_rs,H_cr = dcd_data["Mrs"],dcd_data["Hcr"]
+    sample_name = sample.split(".")[0]
+    if sample_name == "M01v":
+        sample_name = "M01-vein"
+    elif sample_name == "M01m":
+        sample_name = "M01"
+    c = cmap[serp[sample_name]] if sample_name in serp else "gray"
+    plt.scatter(H_cr/H_c,M_rs/M_s,c=c)
+    plt.text(H_cr/H_c,M_rs/M_s,sample)
+
+plt.ylabel("M_rs/M_s")
+plt.xlabel("H_cr/H_c")
+# Plot lines that distinguish between SD, PSD and MD grains.
+psd_md_h = 0.05
+sd_psd_h = 0.5
+sd_psd_v = 1.5
+psd_md_v = 4
+domain_boundary_style = {"linestyle":"--","c":"gray"}
+plt.axvline(sd_psd_v,**domain_boundary_style)
+plt.axvline(psd_md_v,**domain_boundary_style)
+plt.axhline(sd_psd_h,**domain_boundary_style)
+plt.axhline(psd_md_h,**domain_boundary_style)
+plt.text(sd_psd_v,sd_psd_h,"SD",va="bottom",ha="right",c="gray")
+plt.text(sd_psd_v+0.2,sd_psd_h-0.1,"PSD",va="top",ha="left",c="gray")
+plt.text(psd_md_v+0.2,psd_md_h-0.02,"MD",va="top",ha="left",c="gray")
+plt.show()
+
+#+END_SRC
+
+#+RESULTS:
+: None
+
+There appears to be a clear separation between partially (green) and heavily (purple) serpentinized samples, with the partially serpentinized samples plotting more so in the MD region and the heavily serpentinized samples plotting more so in the PSD region.
+* FORC Diagrams
+This difference is supported by FORC diagrams, which are plotted via FORCinel - code written in a proprietary language that can't be included in a notebook. Python code for plotting FORC diagrams is provided below to demonstrate the relevant equation, but is not the same as the more robust implementation in FORCinel. This code implements the equation for the FORC diagram:
+\begin{equation}
+\label{eq:1}
+\rho = -\frac{1}{2} \frac{\partial^2 M}{\partial B \partial Br}
+\end{equation}
+
+Where $M$ is the magnetization (moment), $B$ is the applied field and $Br$ is the reversal field. $\rho$ is plotted in the $Bi$ vs $Bc$ domain space where $Bi = \frac{B + Br}{2}$ (interaction field) and $Bc = \frac{B - Br}{2}$ (coercivity).
+
+Magnetization data is first parsed into ($B$,$Br$) domain space as a raster-like dataset. This is done by handling each FORC separately (with each FORC having variable $B$ but a single $Br$) and collating data from the full collection of FORCs into a single dataframe.
+- Each FORC is smoothed (where there's enough datapoints) using a savgol filter to reduce noise before inclusion in this dataframe.
+
+#+BEGIN_SRC python :session py
+import pandas as pd
+from io import StringIO
+from scipy.signal import savgol_filter
+
+sg_window_len = 5
+
+forc_datafile = "M04.i-2T.frc"
+
+with codecs.open(os.path.join(data_path,forc_datafile),encoding="utf-8",errors="ignore") as infile:
+    data = infile.read().replace("\r","")
+    # Extract FORC table content.
+    data = data.split("    Field         Moment   ")[1]
+    # Parse FORC table content into a pandas-readable format.
+    data = "\n".join([l for l in data.split("\n")[2:-2]]).replace("+","")
+# Find list of raw FORCs.
+forcs = re.findall("(.*?\n\n[\s\S]+?)\n\n",data)
+# Initialize list to store the collection of individual FORCs.
+dfs = []
+dB_vec = []
+Br_vec = []
+M_vec = []
+# Iterate through the raw FORCs.
+for forc in forcs:
+    cleaned_forc = "\n".join(forc.split("\n\n")[::-1])
+    cleaned_forc =  forc.split("\n\n")[1]
+    df = pd.read_csv(StringIO(cleaned_forc),names=["field","moment"])
+    if len(df["moment"])>sg_window_len:
+        df["moment"] = savgol_filter(df["moment"],sg_window_len,1)
+    Br = df["field"][0]
+    df["rev_field"] = Br
+    dfs.append(df)
+
+df = pd.concat(dfs)
+#+END_SRC
+
+#+RESULTS:
+
+A plot of the FORC collection can be produced to visualize its contents.
+
+#+BEGIN_SRC python :session py
+plt.figure()
+[plt.plot(sub_df["field"],sub_df["moment"],c="k",linewidth=0.5) for sub_df in dfs]
+plt.ylabel("Moment /Am$^2$")
+plt.xlabel("Field /T")
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+This visualization can also be performed with lower-branch removal.
+
+#+BEGIN_SRC python :session py
+import numpy as np
+
+lower_branch = dfs[-1]
+
+plt.figure()
+for sub_df in dfs:
+    interp_lower = np.interp(sub_df["field"],lower_branch["field"],lower_branch["moment"])
+    plt.plot(sub_df["field"],sub_df["moment"] - interp_lower,c="k",linewidth=0.5)
+plt.ylabel("Moment /Am$^2$")
+plt.xlabel("Field /T")
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+With reasonable looking FORC collections, the magnetization data in ($B$,$Br$) domain space can then be resampled onto a uniform grid.
+
+#+BEGIN_SRC python :session py
+from scipy.interpolate import griddata
+
+field_min,field_max = min(df["field"]),max(df["field"])
+rev_field_min,rev_field_max = min(df["rev_field"]),max(df["rev_field"])
+
+field_range = np.linspace(field_min,field_max,len(dfs[-1])*2)
+rev_field_range = np.linspace(rev_field_min,rev_field_max,len(dfs)*2)
+B,Br = np.meshgrid(field_range,rev_field_range)
+moment_resamp = griddata((df["field"],df["rev_field"]),df["moment"],(B,Br),method="linear")
+#+END_SRC
+
+#+RESULTS:
+
+This "raster" grid of interpolated magnetization (moment) values is then smoothed using a 2D normal distribution kernel.
+
+#+BEGIN_SRC python :session py
+import cv2
+
+kernel_nxn = lambda n : (lambda x : x/np.linalg.norm(x))(np.ones((n,n)))
+moment_resamp = cv2.filter2D(moment_resamp,ddepth=-1,kernel=kernel_nxn(5))
+#+END_SRC
+
+#+RESULTS:
+
+The implementation of the second order mixed partial derivative involves successive first order discrete gradient-finding with respect to $B$ then $Br$ under the assumption of constant intervals in both variables.
+
+#+BEGIN_SRC python :session py
+dB = field_range[:-1] - field_range[1:]
+dBr = rev_field_range[:-1] - rev_field_range[1:]
+dM_dB = np.gradient(moment_resamp,dB[0])[0]
+d2M_dBdBr_approx = np.gradient(dM_dB,dBr[0])[1]
+rho = -1/2 * d2M_dBdBr_approx
+#+END_SRC
+
+#+RESULTS:
+
+The corresponding raster grid coordinates in $(Bi,Bc)$ space are then computed.
+
+#+BEGIN_SRC python :session py
+Bi = 0.5 * (B + Br)
+Bc = 0.5 * (B - Br)
+#+END_SRC
+
+#+RESULTS:
+
+This permits plotting of $\rho$ in $(Bi,Bc)$ coordinate space.
+
+#+BEGIN_SRC python :session py
+plt.figure()
+plt.contourf(Bc,Bi,rho,cmap="cubehelix_r",vmin=np.nanmin(rho),vmax=np.nanmax(rho)*1.2,levels=50)
+cbar = plt.colorbar()
+cbar.set_label("$\\rho$")
+plt.xlim(0,-np.min(Bc))
+plt.xlabel("Bc /mT")
+plt.ylim(np.min(Bi),-np.min(Bi))
+plt.ylabel("Bi /mT")
+plt.gca().set_aspect("equal")
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+Two $\rho$ peaks can be seen for =M04.i-2T.frc=, suggesting 2 domain state populations are dominant.
+* FORC Diagram PCA
+Raster map PCA was performed using FORCinel, giving rise to 3 principal components of interest for 4 endmembers (Figure [[fig:FORC-PCA]]) that could be combined in various fractions to satisfactorily form the data-derived FORC diagrams.
+
+#+NAME: fig:FORC-PCA
+#+CAPTION: 3-principal component (PC) analysis of the serpentinite FORC diagrams, with identification of 4 endmembers (EMs) that enclose most samples, and are all at least somewhat physically feasible.
+[[./imgs/FORC-PCA-alteration.pdf]]
+
+The degree to which each endmember contributed to the different samples' FORC diagrams was outputted by FORCinel and exported to the table =./local_data/forc_pca_proportions.csv= (with column headers slightly modified). This data can processed to get non-negative percentage contributions by setting negative values to zero and then renormalization.
+
+#+BEGIN_SRC python :session py
+EM_df = pd.read_csv("./local_data/forc_pca_proportions.csv",index_col=0)
+EM_df = df.clip(0,1)
+EM_df = EM_df.div(EM_df.sum(axis=1),axis=0)
+#+END_SRC
+
+#+RESULTS:
+
+This processed dataframe can then be displayed in a more visually intuitive manner by assigning each endmember a color and adjusting the saturation by the percentage contribution
+
+#+BEGIN_SRC python :session py
+import matplotlib as mpl
+from matplotlib.patches import Rectangle
+from matplotlib.collections import PatchCollection
+
+# Manually ordered by degree of serpentinization (both observed and inferred).
+ordered_samples = ["07A.i","M04.i","M07A2.i.2","06B.i","M08B.i","07B.i.2","M01m.i","M02.i","M07A1.ii.2","M07B.ii","06C.ii","06A.ii.a","M01v.i"][::-1]
+EM_df = EM_df.reindex(ordered_samples)
+
+# Cell dimensions
+width = .16
+height = .08
+
+cmaps = ["Reds","Greens","Blues","Oranges"]
+
+plt.text(-width/8,(len(EM_df)+.8)*height,"SAMPLE",va="top",ha="right")
+for row_idx,(sample,row) in enumerate(EM_df.iterrows()):
+    row = EM_df.iloc[row_idx]
+    y = height * row_idx
+    plt.text(-width/8,y+height/2,sample,va="center",ha="right")
+    for em in range(4):
+        str_em = "EM" + str(em+1)
+        x = width * em
+        if row_idx == 0:
+            plt.text(x+width/2,(len(EM_df)+0.8)*height,"EM %u" % (em+1),va="top",ha="center")
+        plt.text(x+width/2,y+height/2,("%.1f" % float(row[str_em]*100))+"%",va="center",ha="center")
+        box = Rectangle((x,y),width,height,facecolor=("white" if row[str_em]==0 else mpl.colormaps[cmaps[em]](int(row[str_em]*128))))#,edgecolor="lightgrey")
+        plt.gca().add_patch(box)
+[plt.plot([width*i,width*i],[0,height*(len(EM_df)+1)],c="k") for i in range(4)]
+plt.plot([-width,4*width],[height*len(EM_df),height*len(EM_df)],c="k")
+plt.ylim(-0.5*height,(len(EM_df)+1)*height)
+plt.xlim(-width,(3+1.2)*width)
+plt.axis("off")
+plt.show()
+
+#+END_SRC
+
+#+RESULTS:
+: None

@@ -2,7 +2,7 @@
 # NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
 # NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
 
-#+TITLE: Phase Equilibrium Modelling
+#+TITLE: Color/Density as Proxies for Serpentinization
 * Introduction
 Not all samples had corresponding thin sections from which a degree of serpentinization could be inferred. Instead, proxies can be used to infer the degree of serpentinization:
 - Color
@@ -191,25 +191,11 @@ Assuming a linear relationship, there seems to be a decrease in density as value
 The lack of a perfect linear relationship between color (value) and density means they may not be equally suitable for interpolating the degree of serpentinization. The samples are ordered by color vs by density and then the degree of serpentinization (from thin section analysis) indicated to check how well each ordering differentiates between partially and heavily serpentinized samples.
 
 #+BEGIN_SRC python :session py
-# Declare the observed degree of serpentinization found for samples where thin sections were present.
-# P: partially serpentinized
-# H: heavily serpentinized
-# V: vein sample (not serpentinized mantle)
-serp = {"07A":"P",
-        "M04":"P",
-        "M08B":"P",
-        "M01":"H",
-        "M02":"H",
-        "M07B":"H",
-        "06C":"H",
-        "M01-vein":"V"}
-# Declare the colors to assign each serpentinization level.
-# P: dark green
-# H: purple
-# V: light blue
-cmap = {"P":"#003f00",
-        "H":"#800080",
-        "V":"#00f4ef"}
+import sys
+# Import observed degree of serpentinization and colormapping data.
+sys.path.insert(0,"../DATASETS/SERP")
+from sample_serp import serp,cmap
+
 # Place the computed density into the mass dataframe.
 mass_df["density"] = density_mean
 

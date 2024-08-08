@@ -1,0 +1,138 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; org-confirm-babel-evaluate: nil; -*-
+# NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
+# NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
+
+#+TITLE: Fabric Orientation in 06C
+* Introduction
+Alongside other samples, sample 06C appeared to display a clear fabric orientation. This is quantified by manually identifying and tracing the long axis of grains/discrete features (mostly clinochlore grains) that contribute to this fabric (Figure [[fig:alignment]]) and then producing rose diagrams charting the frequency of these discrete features.
+
+#+NAME: fig:alignment
+#+CAPTION: Discrete features (mostly clinochlore grains) identified on a section scan of sample 06C that contribute to a fabric.
+[[./imgs/23C-06C-mag-clc-align.pdf]]
+* Reading the Data
+In the actual data source (=./local_data/23C-06C-mag-clc-aligned.svg=), the raster section scan was removed, leaving only the traced long axes remaining.
+
+Different groups of features are denoted by *unique* colors (see the key in Figure [[fig:alignment]]), which permits their distinction after their colors are hardcode mapped to the feature group (name). The orientation of each feature in the group can then be computed.
+
+This produces a list of feature orientations for each feature group.
+
+#+BEGIN_SRC python :session py
+import re
+import numpy as np
+
+# Parse SVG file containing traced long axes into a string.
+orientations_svg = "./local_data/23C-06C-mag-clc-aligned.svg"
+with open(orientations_svg) as infile:
+    svg = infile.read()
+# Find all path objects in the SVG (including irrelevant ones).
+# Store the path stroke color and coordinates in the resulting list.
+paths = re.findall("<path[\s\S]*?stroke:#(.*?);[\s\S]*?d=\"(.*?)\"[\s\S]*?/>",svg)
+# Hardcoded declaration of which color represents which feature.
+colors = {"Clc":"ff6600",
+          "Mag":"2fb5ff",
+          "Fractures":"ff00ff"}
+# Initialize dict to store orientations for each feature group.
+feature_orientations = dict()
+# Iterate through the feature groups in `colors`.
+for feature_name,feature_color in colors.items():
+    # Isolate the paths that represent long axis traces of the active feature (as distinguished by their stroke color).
+    feature_vec = [p[1] for p in paths if p[0] == feature_color]
+    # Initialize list to store feature orientations.
+    orientations = []
+    # Iterate through each feature in the found paths.
+    for feature in feature_vec:
+        # Parse the SVG definition of the long axis line (i.e. comprising two points).
+        if feature.startswith("m"):
+            # Relative coords.
+            try:
+                _,origin,delta = feature.split(" ")
+                dx,dy = np.array(delta.split(",")).astype(float)
+            except ValueError:
+                _,origin,spec,delta = feature.split(" ")
+                if spec == "v":
+                    dx = 0
+                    dy = float(delta)
+                elif spec == "h":
+                    dy = 0
+                    dx = float(delta)
+        elif feature.startswith("M"):
+            # Absolute coords.
+            _,origin,endpoint = feature.split(" ")
+            origin = np.array(origin.split(",")).astype(float)
+            endpoint = np.array(endpoint.split(",")).astype(float)
+            dx,dy = endpoint - origin
+        else:
+            raise ValueError("SVG coord spec not recognised for %s" % feature)
+
+        # Compute and store the long axis orientation from the difference between start and end coordinates.
+        orientation = np.arctan2(dy,dx)
+        orientations.append(orientation)
+
+    # Cast list of orientations into numpy array.
+    orientations = np.array(orientations)
+    # Store computed orientations.
+    feature_orientations[feature_name] = orientations
+#+END_SRC
+
+#+RESULTS:
+
+* Plotting the Data
+A separate half rose diagram is produced for each feature group to highlight the most common feature orientation(s). A half rose diagram (eastern/right semicircle) is used since the orientation data is not directed.
+
+#+BEGIN_SRC python :session py
+import matplotlib.pyplot as plt
+import mplstereonet
+
+def plot_half_rose(orientations,ax,n_bins=15,**plot_kwargs):
+    ''' Produce a half rose diagram from list of orientation datapoints.
+
+    orientations | :list:-like | List of orientation measurements (angles).
+    ax | :matplotlib.projections.polar.PolarAxes: | Stereonet axis to plot the rose diagram on.
+    n_bins | :int: | Number of bins to group the orientations into.
+    plot_kwargs | Plot config kwargs to pass to ax.bar().
+
+    Returns: None
+    '''
+    # Cast list of orientations to numpy array.
+    orientations = np.array(orientations)
+    # Force orientations to take the range -90 to 90 degrees to permit plotting of a half rose diagram.
+    orientations[orientations > (np.pi/2)] -= np.pi
+    orientations[orientations < -(np.pi/2)] += np.pi
+    # Configure the half rose axis.
+    ax.set_theta_direction(-1)
+    ax.set_thetamin(-90)
+    ax.set_thetamax(90)
+    # Bin the orientations in the half rose range.
+    # The range is expanded a bit to account for slight imprecision in radians conversion.
+    counts,bins = np.histogram(orientations,bins=np.radians(np.linspace(-90.1,90.1,n_bins)))
+    # Compute midpoints of each bin's angular range.
+    midpoints = (bins[1:] + bins[:-1])/2
+    # Compute width of each bin.
+    w = midpoints[1] - midpoints[0]
+    # Produce barplot with exactly non-overlapping bars.
+    ax.bar(midpoints,counts,width=w,**plot_kwargs)
+    # Set the y (radial) axis ticks to be present at even numbers.
+    ax.set_yticks(np.arange(0,max(counts)+1,2))
+    return
+
+# Iterate through the feature groups in `colors`.
+for feature_name,feature_color in colors.items():
+    # Extract feature orientations of the active group from data.
+    orientations = feature_orientations[feature_name]
+    # Initialize a figure with stereonet axis.
+    fig = plt.figure(constrained_layout=True,figsize=(2,3))
+    ax = fig.add_subplot(111,projection="polar")
+    # Remove stereonet grid.
+    ax.grid()
+    # Plot half rose diagram of the active groups' feature orientations.
+    plot_half_rose(orientations,ax,n_bins=15,color="#" + feature_color,zorder=100)
+    # Title the plot with the name of the feature group.
+    ax.set_title(feature_name)
+
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+A relatively consistent (NW)-SE common direction can be seen in the three features.
