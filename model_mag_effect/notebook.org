@@ -1,0 +1,131 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; org-confirm-babel-evaluate: nil; -*-
+# NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
+# NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
+
+#+TITLE: Effect of Magnetic Grain Alignment on Magnetism Measured at the Surface
+* Introduction
+The effect of subduction-aligned magnetism on the net magnetization measured at the surface (with respect to the magnitude in the orientation of the ambient field) can be modelled by considering the contribution of the subduction-aligned magnetism either in place of locally-aligned magnetisation at depth or opposing localled-aligned magnetisation if a remanence was acquired under a reversed magnetic field.
+* Outline of Algorithm
+** Normal Polarisation - Subduction-Aligned Replacing Ambient-Field Aligned Magnetisation
+Where subduction-aligned materials are magnetized in the same direction as the ambient field, their strength relative to if they were aligned to the ambient field is simply the projection of their subduction-aligned orientation onto the orientation of the ambient field.
+- Strongest field when the subduction zone is parallel to the ambient field.
+- Weakest field when the subduction zone is perpendicular to the ambient field.
+
+** Reverse Polarisation - Subduction-Aligned Opposing Ambient-Field Aligned Magnetisation
+Where subduction-aligned materials are magnetized in the opposite direction as the ambient field, their effect in countering the ambient magnetisation (of rocks above) is proportional to the projection of their subduction-aligned orientation onto the orientation of the ambient field.
+- Strongest counteraction when the subduction zone is parallel to the ambient field \to weakest measured field at surface (assuming constant magnetic structure).
+- Weakest counteraction when the subduction zone is perpendicular to the ambient field. \to strongest measured field at surface (assuming constant magnetic structure).
+
+* Implementation
+To simplify implementation, a number of assumptions are made:
+- The Geocentric Axial Dipole (GAD) hypothesis holds such that $\tan I = 2 \tan \lambda$ where $I$ is geomagnetic field inclination and $\lambda$ is latitude.
+- The subduction alignment is purely in the N-S direction (i.e. the projection problem becomes 2D), with latitude in degrees ranging from -90 (south) to 90 (north).
+- The relative strengths of "surface measured" magnetisation at different latitudes is for a subduction zone whose magnetic structure remains the same at all locations.
+- The subduction dip did not change between acquisition of remanent magnetisation (RM) and the "current" moment of observation.
+
+#+BEGIN_SRC python :session py
+import numpy as np
+
+# Declare range of subduction dips of interest (+ve is to the north, -ve is to the south).
+sz_dips = [45,30,15]
+# Declare magnitude of magnetisation vector in arbitrary units.
+magnitude = 1
+# Define method to convert between latitude (in degrees) and inclination under the assumption of a GAD.
+inclination = lambda lat : np.arctan(2 * np.tan(np.radians(lat)))
+# Declare latitude range to investigate.
+lats = np.linspace(-90,90,200)
+#+END_SRC
+
+#+RESULTS:
+
+The orientation of the induced and remanent (subduction-aligned) magnetisation as an inclination (i.e. local horizontal) on the earth's surface are:
+- Induced: found using GAD inclination equation.
+- Remanent: equal to the subduction angle.
+
+
+#+BEGIN_SRC python :session py
+# Vectorize the method for finding inclination of induced and remanent magnetization.
+induced = lambda lat : inclination(lat)
+remanent = lambda lat : np.repeat([subduction_dip],len(lat))
+#+END_SRC
+
+#+RESULTS:
+
+Since the assumptions permit a 2D problem, it's easy to compute the length of the remanent vector after projection onto the induced vector using the intervector angle (between the remanent and induced magnetisation vectors). The inducted magnetisation vector can be treated as just an orientation (such that it's magnitude isn't relevant here).
+
+#+BEGIN_SRC python :session py
+# Function to compute the magnitude of the scalar projection of one vector with prescribed magnitude onto an orientation which is at a prescribed angle to the input vector.
+scalar_projection = lambda magnitude,intervector_angle : magnitude * np.cos(intervector_angle)
+#+END_SRC
+
+#+RESULTS:
+
+The functions for finding the projection of the induced and remanent magnitisations onto the ambient field orientation (parallel to induced) can thus be defined.
+
+#+BEGIN_SRC python :session py
+# Function for computing the strength of an induced magnetic moment projected onto the direction of the ambient field (i.e. no change in magnitude).
+IM_proj_magnitude = lambda magnitude,lats : np.repeat([magnitude],len(lats))
+# Function for computing the strength of a subduction-dip-aligned magnetic moment projected onto the direction of the ambient field.
+RM_proj_magnitude = lambda magnitude,lats,subduction_dip : np.abs(scalar_projection(magnitude,inclination(lats)-np.radians(subduction_dip)))
+#+END_SRC
+
+#+RESULTS:
+
+* Plotting
+With the functions defined, it's possible to produce plots showing the effect of latitude and subduction dip on the relative strength of the effect of subduction-aligned remanent magnetisation replacing ambient-aligned induced magnetisation.
+
+In the reversed polarisation case, the effect of the remanent magnetisation is treated as opposing and induced magnetisation of equal magnitude.
+
+#+BEGIN_SRC python :session py
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+IM_proj_mag_values = IM_proj_magnitude(magnitude,lats)
+
+# Initialize plot with a column of 2 axes (for plotting the normal and reversed case).
+fig,axs = plt.subplots(2,1,constrained_layout=True,figsize=(4.8,6.4),sharex=True,sharey=True)
+# In the normal case, plot the strength of the induced magnetisation.
+axs[0].plot(lats,IM_proj_mag_values,label="IM",color="#800080")
+# In the reverse case, plot the strength of the induced magnetisation also, but label it to suggest that the computed strengths/other lines are dependent on it.
+axs[1].plot(lats,IM_proj_mag_values,label="Original IM",linestyle="--",color="#800080")
+# Declare colormap for the normal case.
+cmap_n = mpl.colormaps["Oranges"]
+# Declare colormap for the reverse case.
+cmap_r = mpl.colormaps["Purples"]
+# Iterate through the subduction dips of interest.
+for i,subduction_dip in enumerate(sz_dips):
+    # Construct label for subduction dip.
+    sz_dip = "$\\delta = %u^{\\circ}$" % subduction_dip
+    # Get colormap index for the normal case.
+    cmap_n_idx = int(((i+1)/len(sz_dips))*100+30)
+    # Get colormap index for the reverse case.
+    cmap_r_idx = int(((i+1)/len(sz_dips))*170+30)
+    # Compute and plot the normal case.
+    normal_RM = RM_proj_magnitude(magnitude,lats,subduction_dip)
+    axs[0].plot(lats,normal_RM,label=sz_dip,linestyle="-.",color=cmap_n(cmap_n_idx))
+    # Compute and plot the reverse case (where the RM is treated as cancelling out a coexisting IM of the same magnitude).
+    reverse_RM = -normal_RM
+    net_M = IM_proj_mag_values + reverse_RM
+    axs[1].plot(lats,net_M,label=sz_dip,color=cmap_r(cmap_r_idx))
+# Label x axis of only the lower plot at the two axes share an x scale.
+axs[1].set_xlabel("Latitude /$^{\\circ}$N")
+# Label y axes.
+axs[0].set_ylabel("Relative magnitude")
+axs[1].set_ylabel("Relative magnitude")
+# Label axis titles.
+axs[0].set_title("Normal Remanent Magnetisation")
+axs[1].set_title("Reversed Remanent Magnetisation")
+# Set x axis ticks at every 30 degrees.
+axs[1].set_xticks(np.arange(-90,+120,30))
+# Invert x axis (both plots affected due to sharex) such that +90 (North Pole) is on the left.
+axs[1].invert_xaxis()
+# Add legends to each axis.
+axs[0].legend()
+axs[1].legend()
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+In the normal RM case, the reduction in strength of subduction magnetisation is strongest at mid latitudes in the opposite hemisphere to the pole towards which subduction dips. In the reversed RM case, the reduction in strength is strongest at low latitudes in the same hemisphere to the pole towards which subduction dips.
