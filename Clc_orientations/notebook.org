@@ -8,7 +8,7 @@ Alongside other samples, sample 06C appeared to display a clear fabric orientati
 
 #+NAME: fig:alignment
 #+CAPTION: Discrete features (mostly clinochlore grains) identified on a section scan of sample 06C that contribute to a fabric.
-[[./imgs/23C-06C-mag-clc-align.pdf]]
+[[./imgs/23C-06C-mag-clc-align.png]]
 * Reading the Data
 In the actual data source (=./local_data/23C-06C-mag-clc-aligned.svg=), the raster section scan was removed, leaving only the traced long axes remaining.
 

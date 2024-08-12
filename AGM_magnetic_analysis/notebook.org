@@ -2,7 +2,7 @@
 # NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
 # NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
 
-#+TITLE: Fabric Orientation in 06C
+#+TITLE: Magnetic Data Analysis
 * Introduction
 Hysteresis loops, demagnetization curves and first order reversal curve collections were measured on an AGM at Cambridge. This dataset can be used to infer the different types of magnetic domain states within a rock through the production of plots:
 - Day Plots \citep{Day1977} - bulk domain state
@@ -17,27 +17,47 @@ import re
 import codecs
 import os
 
+# Declare path to AGM datafiles.
 data_path = "../DATASETS/AGM/"
-
+# Get list of datafiles.
 files = os.listdir(data_path)
+# Extract list of samples that were analysed.
+# The names are specific to sample slices (where multiple slices can come from a single sample).
 samples = sorted(set([f.split("-")[0] for f in files if f.endswith(".dcd") or f.endswith(".hys")]))
 
 def extract_hys_params(hys_file):
+    ''' Extract Ms and Hc from a hysteresis datafile and return in a dict structure.
+
+    hys_file | :str: | Path to the hysteresis datafile.
+
+    Returns: :dict:
+    '''
+    # Parse datafile into string.
     with codecs.open(hys_file,encoding="utf-8",errors="ignore") as infile:
         data = infile.read()
+        # Extract Ms and Hc.
         M_s = re.search("Saturation  \s+(.+?)\s",data).group(1)
         H_c = re.search("Coercivity  \s+(.+?)\s",data).group(1)
     return {"Ms":float(M_s),
             "Hc":float(H_c)}
 
 def extract_dcd_params(dcd_file):
+    ''' Extract Mrs and Hcr from a DC demagnetization datafile and return in a dict structure.
+
+    hys_file | :str: | Path to the demagnetization datafile.
+
+    Returns: :dict:
+    '''
+    # Parse datafile into string.
     with codecs.open(dcd_file,encoding="utf-8",errors="ignore") as infile:
         data = infile.read()
+        # Extract Mrs and Hcr.
         M_rs = re.search("Remanence  \s+(.+?)\s",data).group(1)
         H_cr = re.search("Coercivity \(remanent\)  \s+(.+?)\s",data).group(1)
     return {"Mrs":float(M_rs),
             "Hcr":float(H_cr)}
 
+# Provide an example usage of these functions for sample M02 (slice i).
 print("Example for sample M02 (H /T; M /Am^2):")
 print(extract_hys_params(os.path.join(data_path,"M02.i-2T.hys")))
 print(extract_dcd_params(os.path.join(data_path,"M02.i-1T.dcd")))
@@ -58,27 +78,38 @@ from sample_serp import serp,cmap
 
 import matplotlib.pyplot as plt
 
+# Initialize plot.
 plt.figure()
+# Iterate through sample slices.
 for sample in samples:
+    # Find the hysteresis datafile that represents measurement to the largest applied magnetic field for active sample slice.
     max_hys_loop_f = sorted([f for f in files if ("2T" in f) and (f"{sample}-" in f) and f.endswith(".hys")])[0]
+    # Find a dcd datafile for active sample slice.
     dcd_f = sorted([f for f in files if sample in f and f.endswith(".dcd")])[0]
+    # Display which files were used for the active sample slice.
     print(sample,max_hys_loop_f,dcd_f)
+    # Extract data from the relevant files for Day Plotting.
     hys_data = extract_hys_params(os.path.join(data_path,max_hys_loop_f))
     dcd_data = extract_dcd_params(os.path.join(data_path,dcd_f))
     M_s,H_c = hys_data["Ms"],hys_data["Hc"]
     M_rs,H_cr = dcd_data["Mrs"],dcd_data["Hcr"]
+    # Extract the parent sample name from the sample slice name for color (related to observed degree of serpentinization) assignment.
     sample_name = sample.split(".")[0]
+    # Normalize the sample name to those used in the colormapping dictionaries.
     if sample_name == "M01v":
         sample_name = "M01-vein"
     elif sample_name == "M01m":
         sample_name = "M01"
+    # Determine color based on the sample's level of serpentinization where observed.
     c = cmap[serp[sample_name]] if sample_name in serp else "gray"
+    # Add active sample slice's point onto Day Plot.
     plt.scatter(H_cr/H_c,M_rs/M_s,c=c)
+    # Label this point with the sample slice name.
     plt.text(H_cr/H_c,M_rs/M_s,sample)
-
+# Label axes.
 plt.ylabel("M_rs/M_s")
 plt.xlabel("H_cr/H_c")
-# Plot lines that distinguish between SD, PSD and MD grains.
+# Declare locations of and plot lines that approximately distinguish SD, PSD and MD regions (Day 1977).
 psd_md_h = 0.05
 sd_psd_h = 0.5
 sd_psd_v = 1.5
@@ -88,9 +119,11 @@ plt.axvline(sd_psd_v,**domain_boundary_style)
 plt.axvline(psd_md_v,**domain_boundary_style)
 plt.axhline(sd_psd_h,**domain_boundary_style)
 plt.axhline(psd_md_h,**domain_boundary_style)
+# Label SD, PSD and MD regions
 plt.text(sd_psd_v,sd_psd_h,"SD",va="bottom",ha="right",c="gray")
 plt.text(sd_psd_v+0.2,sd_psd_h-0.1,"PSD",va="top",ha="left",c="gray")
 plt.text(psd_md_v+0.2,psd_md_h-0.02,"MD",va="top",ha="left",c="gray")
+
 plt.show()
 
 #+END_SRC
@@ -116,10 +149,13 @@ import pandas as pd
 from io import StringIO
 from scipy.signal import savgol_filter
 
-sg_window_len = 5
-
+# Declare which FORC datafile to process and plot as a FORC diagram.
 forc_datafile = "M04.i-2T.frc"
 
+# Declare width of savgol filter.
+sg_window_len = 5
+
+# Parse FORC datafile into str.
 with codecs.open(os.path.join(data_path,forc_datafile),encoding="utf-8",errors="ignore") as infile:
     data = infile.read().replace("\r","")
     # Extract FORC table content.
@@ -130,20 +166,24 @@ with codecs.open(os.path.join(data_path,forc_datafile),encoding="utf-8",errors="
 forcs = re.findall("(.*?\n\n[\s\S]+?)\n\n",data)
 # Initialize list to store the collection of individual FORCs.
 dfs = []
-dB_vec = []
-Br_vec = []
-M_vec = []
 # Iterate through the raw FORCs.
 for forc in forcs:
+    # Process raw FORCs into a format suitable for parsing into pandas dataframe.
     cleaned_forc = "\n".join(forc.split("\n\n")[::-1])
     cleaned_forc =  forc.split("\n\n")[1]
+    # Parse into pandas dataframe.
     df = pd.read_csv(StringIO(cleaned_forc),names=["field","moment"])
+    # Check if there's enough datapoints for savgol filtering...
     if len(df["moment"])>sg_window_len:
+        # ... and if so, perform the filtering using a degree 1 polynomial.
         df["moment"] = savgol_filter(df["moment"],sg_window_len,1)
+    # Extract the reversal field.
     Br = df["field"][0]
+    # Assign the active FORC's reversal field to all measurements in the active FORC.
     df["rev_field"] = Br
+    # Store active FORC.
     dfs.append(df)
-
+# Combine the list of parsed + processed FORCs into one dataframe.
 df = pd.concat(dfs)
 #+END_SRC
 
@@ -152,8 +192,11 @@ df = pd.concat(dfs)
 A plot of the FORC collection can be produced to visualize its contents.
 
 #+BEGIN_SRC python :session py
+# Initialize figure.
 plt.figure()
+# Plot the collection of FORCs.
 [plt.plot(sub_df["field"],sub_df["moment"],c="k",linewidth=0.5) for sub_df in dfs]
+# Label axes.
 plt.ylabel("Moment /Am$^2$")
 plt.xlabel("Field /T")
 plt.show()
@@ -162,17 +205,24 @@ plt.show()
 #+RESULTS:
 : None
 
-This visualization can also be performed with lower-branch removal.
+This visualization can also be performed with lower-branch removal (though note that the interpolated nature of the lower branch as is without fitting an analytical function to it means the tails may not look great compared to e.g. results produced in FORCinel).
 
 #+BEGIN_SRC python :session py
 import numpy as np
 
+# Isolate lower branch of the FORCs collection.
 lower_branch = dfs[-1]
-
+# Initialize figure.
 plt.figure()
+# Iterate through the FORCs.
 for sub_df in dfs:
+    # Interpolate the moment of the lower branch at the measurement points of the active FORC.
     interp_lower = np.interp(sub_df["field"],lower_branch["field"],lower_branch["moment"])
+    # Subtract the lower branch from the active FORC and plot.
     plt.plot(sub_df["field"],sub_df["moment"] - interp_lower,c="k",linewidth=0.5)
+# Crop plot x range to range covered by the lower branch (i.e. where interpolation is valid).
+plt.xlim(min(lower_branch["field"]),max(lower_branch["field"]))
+# Label axes.
 plt.ylabel("Moment /Am$^2$")
 plt.xlabel("Field /T")
 plt.show()
@@ -181,17 +231,22 @@ plt.show()
 #+RESULTS:
 : None
 
-With reasonable looking FORC collections, the magnetization data in ($B$,$Br$) domain space can then be resampled onto a uniform grid.
+With reasonable looking FORC collections, the magnetization data in ($B$,$Br$) domain space can then be resampled onto a (finer) uniform grid.
 
 #+BEGIN_SRC python :session py
 from scipy.interpolate import griddata
 
+# Find minimum and maximum applied field.
 field_min,field_max = min(df["field"]),max(df["field"])
+# Find minimum and maximum reversal field.
 rev_field_min,rev_field_max = min(df["rev_field"]),max(df["rev_field"])
-
-field_range = np.linspace(field_min,field_max,len(dfs[-1])*2)
-rev_field_range = np.linspace(rev_field_min,rev_field_max,len(dfs)*2)
+# Declare the subsampling factor.
+subsamp = 2
+# Create a uniform and subsampled grid within the min-max bounds of the applied and reversal fields.
+field_range = np.linspace(field_min,field_max,len(dfs[-1])*subsamp)
+rev_field_range = np.linspace(rev_field_min,rev_field_max,len(dfs)*subsamp)
 B,Br = np.meshgrid(field_range,rev_field_range)
+# Resample the magnetic moment onto this uniform grid.
 moment_resamp = griddata((df["field"],df["rev_field"]),df["moment"],(B,Br),method="linear")
 #+END_SRC
 
@@ -201,8 +256,9 @@ This "raster" grid of interpolated magnetization (moment) values is then smoothe
 
 #+BEGIN_SRC python :session py
 import cv2
-
+# Declare smoothing method in the form of a n by n "pixels" square kernel.
 kernel_nxn = lambda n : (lambda x : x/np.linalg.norm(x))(np.ones((n,n)))
+# Smooth the magnetization raster.
 moment_resamp = cv2.filter2D(moment_resamp,ddepth=-1,kernel=kernel_nxn(5))
 #+END_SRC
 
@@ -211,10 +267,14 @@ moment_resamp = cv2.filter2D(moment_resamp,ddepth=-1,kernel=kernel_nxn(5))
 The implementation of the second order mixed partial derivative involves successive first order discrete gradient-finding with respect to $B$ then $Br$ under the assumption of constant intervals in both variables.
 
 #+BEGIN_SRC python :session py
+# Find the applied field vector's intervals.
 dB = field_range[:-1] - field_range[1:]
+# Find the reversal field vector's intervals.
 dBr = rev_field_range[:-1] - rev_field_range[1:]
+# Compute successive partial derivatives under the assumption of constant intervals (i.e. taking only the first interval out of the vector of intervals for each).
 dM_dB = np.gradient(moment_resamp,dB[0])[0]
 d2M_dBdBr_approx = np.gradient(dM_dB,dBr[0])[1]
+# Compute rho from the second order mixed partial derivative.
 rho = -1/2 * d2M_dBdBr_approx
 #+END_SRC
 
@@ -223,7 +283,9 @@ rho = -1/2 * d2M_dBdBr_approx
 The corresponding raster grid coordinates in $(Bi,Bc)$ space are then computed.
 
 #+BEGIN_SRC python :session py
+# Compute the internal field.
 Bi = 0.5 * (B + Br)
+# Compute the coercivity.
 Bc = 0.5 * (B - Br)
 #+END_SRC
 
@@ -232,15 +294,23 @@ Bc = 0.5 * (B - Br)
 This permits plotting of $\rho$ in $(Bi,Bc)$ coordinate space.
 
 #+BEGIN_SRC python :session py
+# Initialize plot.
 plt.figure()
+# Plot filled contours of rho.
 plt.contourf(Bc,Bi,rho,cmap="cubehelix_r",vmin=np.nanmin(rho),vmax=np.nanmax(rho)*1.2,levels=50)
+# Add colorbar to plot.
 cbar = plt.colorbar()
+# Label colorbar.
 cbar.set_label("$\\rho$")
+# Set axes limits.
 plt.xlim(0,-np.min(Bc))
-plt.xlabel("Bc /mT")
 plt.ylim(np.min(Bi),-np.min(Bi))
+# Set axes labels.
+plt.xlabel("Bc /mT")
 plt.ylabel("Bi /mT")
+# Set plot aspect ratio to 1:1.
 plt.gca().set_aspect("equal")
+
 plt.show()
 #+END_SRC
 
@@ -253,13 +323,16 @@ Raster map PCA was performed using FORCinel, giving rise to 3 principal componen
 
 #+NAME: fig:FORC-PCA
 #+CAPTION: 3-principal component (PC) analysis of the serpentinite FORC diagrams, with identification of 4 endmembers (EMs) that enclose most samples, and are all at least somewhat physically feasible.
-[[./imgs/FORC-PCA-alteration.pdf]]
+[[./imgs/FORC-PCA-alteration.png]]
 
 The degree to which each endmember contributed to the different samples' FORC diagrams was outputted by FORCinel and exported to the table =./local_data/forc_pca_proportions.csv= (with column headers slightly modified). This data can processed to get non-negative percentage contributions by setting negative values to zero and then renormalization.
 
 #+BEGIN_SRC python :session py
+# Load endmember proportions data with row-wise samples.
 EM_df = pd.read_csv("./local_data/forc_pca_proportions.csv",index_col=0)
-EM_df = df.clip(0,1)
+# Clip proportions to between 0 and 1.
+EM_df = EM_df.clip(0,1)
+# Renormalize endmember proportions data.
 EM_df = EM_df.div(EM_df.sum(axis=1),axis=0)
 #+END_SRC
 
@@ -272,37 +345,56 @@ import matplotlib as mpl
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
 
-# Manually ordered by degree of serpentinization (both observed and inferred).
+# Manually order samples by level of serpentinization and then alphabetical order (both observed and inferred).
 ordered_samples = ["07A.i","M04.i","M07A2.i.2","06B.i","M08B.i","07B.i.2","M01m.i","M02.i","M07A1.ii.2","M07B.ii","06C.ii","06A.ii.a","M01v.i"][::-1]
+# Order the endmember dataframe by this manually-defined order.
 EM_df = EM_df.reindex(ordered_samples)
-
-# Cell dimensions
+# Declare cell dimensions for each endmember proportion entry.
 width = .16
 height = .08
-
+# Declare colors for each endmember.
 cmaps = ["Reds","Greens","Blues","Oranges"]
-
+# Name the first column holding sample names by displaying so in the header row.
 plt.text(-width/8,(len(EM_df)+.8)*height,"SAMPLE",va="top",ha="right")
+# Iterate through samples in the endmembers dataframe.
 for row_idx,(sample,row) in enumerate(EM_df.iterrows()):
-    row = EM_df.iloc[row_idx]
+    # Find the y level for the active sample.
     y = height * row_idx
+    # Display the sample name in the first column.
     plt.text(-width/8,y+height/2,sample,va="center",ha="right")
-    for em in range(4):
-        str_em = "EM" + str(em+1)
-        x = width * em
+    # Iterate through the endmembers.
+    for i,em in enumerate(EM_df.columns):
+        # Find the x position for the active endmember.
+        x = width * i
+        # Check if the active row is the first row (i.e. just below the header row)...
         if row_idx == 0:
-            plt.text(x+width/2,(len(EM_df)+0.8)*height,"EM %u" % (em+1),va="top",ha="center")
-        plt.text(x+width/2,y+height/2,("%.1f" % float(row[str_em]*100))+"%",va="center",ha="center")
-        box = Rectangle((x,y),width,height,facecolor=("white" if row[str_em]==0 else mpl.colormaps[cmaps[em]](int(row[str_em]*128))))#,edgecolor="lightgrey")
+            # ... and if so, display the name of the endmember in the row above (i.e. the header row).
+            plt.text(x+width/2,(len(EM_df)+0.8)*height,"EM %u" % (i+1),va="top",ha="center")
+        # Display the endmember proportion for the active sample and active endmember.
+        plt.text(x+width/2,y+height/2,("%.1f" % float(row[em]*100))+"%",va="center",ha="center")
+        # Plot a background for this proportion whose color intensity is controlled by the value of the proportion.
+        box = Rectangle((x,y),width,height,facecolor=("white" if row[em]==0 else mpl.colormaps[cmaps[i]](int(row[em]*128))))
         plt.gca().add_patch(box)
+# Plot vertical lines separating the columns.
 [plt.plot([width*i,width*i],[0,height*(len(EM_df)+1)],c="k") for i in range(4)]
+# Plot a horizontal line separating the header column.
 plt.plot([-width,4*width],[height*len(EM_df),height*len(EM_df)],c="k")
+# Set axes limits.
 plt.ylim(-0.5*height,(len(EM_df)+1)*height)
 plt.xlim(-width,(3+1.2)*width)
+# Don't show the axes.
 plt.axis("off")
-plt.show()
 
+plt.show()
 #+END_SRC
 
 #+RESULTS:
 : None
+
+A clear difference partially and heavily serpentinized samples (between M08B and 07B) can be seen, with partially serpentinized samples being dominated by EM1, whilst heavily serpentinized samples contain appreciable proportions of EM4.
+
+Looking at the endmember FORC signatures (figure [[fig:EM]]), it seems that the partially serpentinized samples are magnetically dominated by MD grains, whereas the heavily serpentinized samples contain more PSD grains. This is consistent with the Day Plot.
+
+#+NAME: fig:EM
+#+CAPTION: Endmember FORC signatures.
+[[./imgs/EM-forcs.png]]
