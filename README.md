@@ -1,6 +1,6 @@
 
 
-# `AGM_magnetic_analysis/notebook.ipynb`
+# AGM\_magnetic\_analysis/notebook.ipynb
 
 Parse magnetic data produced using the Alternating Gradient Magnetometer at Cambridge, including:
 
@@ -20,7 +20,7 @@ Parse magnetic data produced using the Alternating Gradient Magnetometer at Camb
 `codecs`, `cv2`, `io`, `matplotlib.collections`, `matplotlib.patches`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `re`, `scipy.interpolate`, `scipy.signal`, `sys`
 
 
-# `Clc_orientations/notebook.ipynb`
+# Clc\_orientations/notebook.ipynb
 
 Plot half rose diagrams of manually drawn SVG lines that represent the long axes of different features (most notably clinochlore grains) on a thin section scan.
 
@@ -35,7 +35,7 @@ Plot half rose diagrams of manually drawn SVG lines that represent the long axes
 `matplotlib.pyplot`, `mplstereonet`, `numpy`, `re`
 
 
-# `EBSD_mapping/notebook.ipynb`
+# EBSD\_mapping/notebook.ipynb
 
 Plot EBSD orientations (about 3 orthogonal axes) with a ternary (R,G,B) colormap.
 
@@ -50,7 +50,7 @@ Plot EBSD orientations (about 3 orthogonal axes) with a ternary (R,G,B) colormap
 `io`, `matplotlib.pyplot`, `mpltern.datasets`, `numpy`, `pandas`, `re`
 
 
-# `EPMA_data_analysis/notebook.ipynb`
+# EPMA\_data\_analysis/notebook.ipynb
 
 Match EBSD data to compositions from Webmineral to try and identify minerals.
 
@@ -69,7 +69,7 @@ Also compare compositional properties between early- and late-formed clinochlore
 `io`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `re`, `requests`
 
 
-# `XRF_to_PEM/XRF-PCA.ipynb`
+# XRF\_to\_PEM/XRF-PCA.ipynb
 
 Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
 
@@ -90,7 +90,7 @@ Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
 `R`
 
 
-# `XRF_to_PEM/XRF_plots.ipynb`
+# XRF\_to\_PEM/XRF\_plots.ipynb
 
 Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
 
@@ -113,7 +113,7 @@ Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
 `inkscape`
 
 
-# `XRF_to_PEM/notebook.ipynb`
+# XRF\_to\_PEM/notebook.ipynb
 
 Normalize raw XRF compositional data for Phase Equilibrium Modelling (PEM), and execute PEM on all serpentinite samples from the XRF data.
 
@@ -133,7 +133,7 @@ Normalize raw XRF compositional data for Phase Equilibrium Modelling (PEM), and 
 `wine`
 
 
-# `XRF_to_PEM/results.ipynb`
+# XRF\_to\_PEM/results.ipynb
 
 Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
 
@@ -154,7 +154,7 @@ Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
 `wine`
 
 
-# `density_color/notebook.ipynb`
+# density\_color/notebook.ipynb
 
 Process data to find sample density and average color properties, and then compare the two for use as serpentinization indicators.
 
@@ -169,7 +169,7 @@ Process data to find sample density and average color properties, and then compa
 `PIL`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `scipy.optimize`, `sklearn.metrics`, `sys`
 
 
-# `model_mag_effect/notebook.ipynb`
+# model\_mag\_effect/notebook.ipynb
 
 Model the effect of subduction-aligned remanent magnetization on hypothetical, surface-measured magnetization.
 
@@ -185,7 +185,7 @@ Model the effect of subduction-aligned remanent magnetization on hypothetical, s
 `matplotlib.pyplot`, `matplotlib`, `numpy`
 
 
-# `reflector_grain_orientations/notebook.ipynb`
+# reflector\_grain\_orientations/notebook.ipynb
 
 Filter detected reflector grains by area, orientation and elongation, and plot them on top of reflected light scans.
 
@@ -200,7 +200,7 @@ Filter detected reflector grains by area, orientation and elongation, and plot t
 `PIL`, `cv2`, `matplotlib.collections`, `matplotlib.patches`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `shapely`, `tqdm`
 
 
-# `vein_transects/server.py`
+# vein\_transects/server.py
 
 Produce and analyze vein profiles.
 
@@ -212,7 +212,7 @@ Produce and analyze vein profiles.
 
 ### Python (pip) Modules
 
-`PIL`, `datetime`, `flask`, `io`, `json`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `pathlib`, `re`, `scipy.signal`, `shapely`, `subprocess`, `testing_options`
+`PIL`, `datetime`, `flask`, `io`, `json`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `pathlib`, `re`, `scipy.signal`, `shapely`, `subprocess`
 
 
 ### System Packages
