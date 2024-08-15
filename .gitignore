@@ -15,3 +15,6 @@
 !*.md
 !*.tiff
 !vein_transects/vein-paths/example-path.txt
+!*.csv
+!*/imgs/*
+!*/local_data/*

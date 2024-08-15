@@ -722,6 +722,7 @@ Since the oxidation that affected $f_{Fe3}$ likely arose at least partially from
 With water following a initially rapid then slower increase along the serpentinisation path \citep{Grove1995}, and silica being introduced by the water \citep{Bebout1989}, the serpentinisation path results in an increase in both water and silica proportional to each other (i.e. following the same relative path) before reaching the observed values (i.e. their addition is not assumed to be related to surface processes).
 
 The changes along the serpentinisation path are summarized in Table [[tab:serp-changes]].
+#+NAME: tab:serp-changes
 | Component    | Protolith       | End             |
 |--------------+-----------------+-----------------|
 | H2O          | 0.004 wt%       | observed        |

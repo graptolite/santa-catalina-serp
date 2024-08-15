@@ -12,7 +12,7 @@ Alongside other samples, sample 06C appeared to display a clear fabric orientati
 * Reading the Data
 In the actual data source (=./local_data/23C-06C-mag-clc-aligned.svg=), the raster section scan was removed, leaving only the traced long axes remaining.
 
-Different groups of features are denoted by *unique* colors (see the key in Figure [[fig:alignment]]), which permits their distinction after their colors are hardcode mapped to the feature group (name). The orientation of each feature in the group can then be computed.
+Different groups of features are denoted by *unique* colors, which permits their distinction after their colors are hardcode mapped to the feature group (name). The orientation of each feature in the group can then be computed.
 
 This produces a list of feature orientations for each feature group.
 
