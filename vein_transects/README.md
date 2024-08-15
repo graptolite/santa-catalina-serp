@@ -1,0 +1,87 @@
+
+
+# Starting the App
+
+Type `python server.py` into the console and open <http://127.0.0.1:5000/> in a web browser.
+
+
+# Usage
+
+
+## EDS Folder Loading
+
+On load, there will be page with an input text box and a button named "Load folder" to its right. This takes the path to the folder containing EDS composition maps. All tiff files in this folder must be element abundance maps, and with the respective element symbol in the file name. **All tiff files must also be the same size** - as such, the folder should contain EDS maps of the same region in a sample. The tiff files should contain only data (no scalebars, headers etc.).
+
+1.  Type the folder into the box. To use the example folder, type `example` into this box.
+2.  Press "Load folder".
+3.  Refresh the page
+
+
+## EDS Map Analysis
+
+Upon refresh, the webpage will render control page for EDS map analysis. An arbitrary element map will be loaded purely as a placeholder.
+
+Broadly speaking, the buttons will show as needed (i.e. to guide through the process) - however, this shouldn't be relied on at the moment.
+
+
+### Element Loading
+
+To load an element for analysis:
+
+1.  Type the symbol of the element of interest into the `Element symbol` input box - e.g. `Mg`.
+2.  Press the `Load element` button.
+3.  This will load the desired element as the active element for further analysis, and also display a JPG converted representation of the element's EDS map in the webpage.
+
+
+### Vein Path Defining
+
+The vein path (which should follow the medial line of the vein of interest) can either be defined by drawing onto the displayed EDS map (which acts as a canvas) and then pressing `Save`, or by loading a saved definition file using `Load`. The vein path will display as a thin red line.
+
+If a vein path is drawn and then saved, the vein definition file it saves to will be in `./vein-paths/` and be automatically named based on the current time. This file can be renamed to a more suitable name (e.g. referencing the sample and a vein identification string), and then the full path to this **newly renamed file be inserted into the path input** and the **`Load` button pressed to register this name change**.
+
+If a previously-defined vein path file (must be stored in `./vein-paths/`) is to be loaded, insert the **full system filepath** of the vein path of interest (e.g. if `server.py` is housed in `/home/user/folder`, and the vein path of interest is `./vein-paths/sample1-vein1.txt`, then `/home/user/folder/vein-paths/sample1-vein1.txt` must be inputted) before pressing the `Load` button.
+
+-   For the example, load the full path of `./vein-paths/example-path.txt`.
+
+
+### GMT Profiling
+
+To define the length of the GMT profiles, draw a line across the medial vein path and press `Send profile length`. The profile will display as a thick green line. This will recenter the profile line about the medial vein path, and also enforce perpendicularity of the profile to the vein path.
+
+-   The GMT profiling characterizes a collection of equally-spaced perpendicular profiles along the vein path (i.e. this step is just for defining the profile length).
+
+Once this profile line is provided, press the `Profile` button to execute the GMT profiling. Once the profiling completes, an image of the profiling result will be shown below the EDS map. The raw image outputs will be saved into `./static/`.
+
+
+### Profile Analysis
+
+To analyze the profile (attempt to detect the vein part of the signal, detect background extrema in the "background noise" of the signal and determine whether the vein part of the signal contains extrema that are more extreme than the background extrema), a few more inputs must be provided:
+
+1.  The vein span along the profile line - draw a line going across the vein close to the profile line and then press `Send vein width`. To redraw this, draw a new line and then press `Send vein width` again.
+2.  (OPTIONAL) the selvage/margin span along the profile line (which will be treated as part of the vein feature during analysis e.g. when defining the part of the profile that can be treated as "background noise") - draw a line going across both margins of the vein (i.e. this should be longer than the vein span) and then press `Send selvage width`. To redraw this, draw a new line and then press `Send selvage width` again.
+3.  The regions of the EDS map that define the background - draw a line that represent the diagonal of a rectangle that encloses a region of the EDS map representing the matrix/background the vein cuts across and then press `Send bkg rect`. This can be repeated to add more background/matrix rectangles. To reset the collection of background/matrix rectangles, press `Clear bkg rect(s)`.
+
+Once the required extra information is provided, press `Analyse profile`, which will show the analysed profile in place of the GMT profile result below the EDS map. The raw image outputs will be saved into `./static/`.
+
+
+### EDS Map Smoothing
+
+To smooth and recenter pixels on the the EDS map (i.e. colormap the image to represent deviation from the background/matrix mean), press `Smooth Map`. This will place the smoothed image below the EDS map. The raw image outputs will be saved into `./tmp/`.
+
+
+### Saving the EDS Map and SVG Overlays
+
+A representation of the EDS map and overlays can be saved to disk by pressing `Save SVG overlay`. The output file will reference rather than embed the JPG converted EDS image, but should be displayable in Inkscape.
+
+
+## Acting on All EDS Element Maps
+
+The two buttons `Profile All` and `Smooth All` act on all the EDS element tiff maps in the loaded EDS folder. They apply `Profile` or `Smooth Map` (respectively) to all of the EDS maps and collate the results into a report. This output report will be placed in the same directory `server.py` and will be named `<all-profiles/smoothed-maps>-<vein id>.txt-out.pdf`.
+
+Both types of report will have `Save SVG overlay` executed and the output prepended. The profiles report will have the individual GMT profile locations also shown.
+
+
+## Buttons for Clearing
+
+-   `Clear active drawing` resets the live canvas by removing any currently-drawn objects. This does not remove things that have been previously drawn and stored.
+-   `Clear all options` resets everything that's been loaded on the EDS analysis page, including anything that's been drawn and stored on the EDS map canvas.

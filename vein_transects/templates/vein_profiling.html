@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Vein Profiling</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <!--<script src="/static/jquery.js"></script>-->
+    <script>
+      var canvas, ctx = 0;
+      var all_xy = [];
+      var svg_fname = "";
+      var bkg_rect_exists = false;
+      var vein_width_exists = false;
+      var profile_exists = false;
+      var loaded_element = "";
+
+      function init_canvas() {
+          canvas = document.getElementById("canv-map");
+          body = document.getElementsByTagName("body")[0];
+          ctx = canvas.getContext("2d");
+          console.log("loaded");
+          canvas.addEventListener("mousedown",function (e) {appendxy(e)});
+      }
+
+      function appendxy (e) {
+          x = e.clientX - canvas.offsetLeft;
+          y = e.clientY - canvas.offsetTop;
+          all_xy.push([x,y]);
+          drawxy(all_xy);
+      }
+
+      function drawxy (all_xy) {
+          ctx.clearRect(0,0,canvas.width,canvas.height);
+          ctx.fillStyle = "red";
+          x_center = all_xy[0][0]-1.5;
+          y_center = all_xy[0][1]-1.5;
+          ctx.fillRect(x_center,y_center,2,2);
+          ctx.beginPath();
+          ctx.moveTo(...all_xy[0]);
+          for (const point of all_xy.slice(1)) {ctx.lineTo(...point)};
+          ctx.strokeStyle = "red";
+          ctx.stroke();
+      }
+
+      function clearxy () {
+          ctx.clearRect(0,0,canvas.width,canvas.height);
+          all_xy = [];
+      }
+
+      function update_status (the_id,newstatus="Loaded") {
+          document.getElementById(the_id).innerHTML = newstatus;
+      }
+
+      function savexy (input_def) {
+          $.ajax({
+              url: "/save_path",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: JSON.stringify({"xy":all_xy,"def":input_def}),
+              success: function (data) {
+                  console.log("Saved");
+                  ctx.reset();
+                  plot_svg(`${input_def}_line`,`svg-${input_def}-line`);
+                  all_xy = [];
+              }
+          });
+      }
+
+       function show_class(class_to_show) {
+      elemCollection = document.getElementsByClassName(class_to_show);
+        for (const elem of elemCollection) {
+            elem.style["display"] = "block";
+        };
+      }
+
+      function hide_class(class_to_show) {
+      elemCollection = document.getElementsByClassName(class_to_show);
+        for (const elem of elemCollection) {
+            elem.style["display"] = "none";
+        };
+      }
+
+
+      function load_vein_path () {
+          var filepath = document.getElementById("filepath").value;
+          $.ajax({
+              url: "/load_vein_path",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: JSON.stringify(filepath),
+              success: function (data) {
+              if (data["data"]==="") {
+              document.getElementById("profile-display").innerHTML = `Vein path file not found`
+              } else {
+                  clearxy();
+                  console.log(data["data"]);
+                  document.getElementById("profile-display").innerHTML = ``
+                  plot_svg("vein_line","svg-vein-line");
+                  update_status("entered-vein-def");
+                  show_class("PreGMTProfile");
+                  show_class("SaveSVG");
+                  }
+              }
+          });
+      }
+
+
+      function save_vein() {
+	  update_status("entered-vein-def");
+	  savexy("vein");
+        show_class("PreGMTProfile");
+        show_class("SaveSVG");
+      }
+
+
+
+      function profile_length() {
+          update_status("entered-profile-length");
+          savexy("profile");
+          show_class("GMTProfile");
+          show_class("PreAnalyzedProfile");
+        }
+
+      function vein_width() {
+          savexy("crossvein");
+          update_status("entered-vein-width");
+          vein_width_exists = true;
+          if (bkg_rect_exists) {
+          show_class("Smoothing");
+          show_class("FullStatus");
+          if (profile_exists) {
+            show_class("AnalyzedProfile");
+            }
+          }
+      }
+
+      function selvage_width() {
+          savexy("crossselvage");
+          update_status("entered-selvage-width");
+      }
+
+      function gmt_profile() {
+          $.ajax({
+              url: "/gmt_profile",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: JSON.stringify("PROFILING"),
+              success : function (data) {
+                  display_profile(data["filename"]);
+              }
+          });
+          profile_exists = true;
+          if (vein_width_exists && bkg_rect_exists) {
+          show_class("FullStatus");
+          if (profile_exists) {
+            show_class("AnalyzedProfile");
+            }
+            }
+      }
+
+      function loadelem() {
+          var element = document.getElementById("element").value;
+          $.ajax({
+              url: "/load_elem",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: JSON.stringify(element),
+              success: function (data) {
+                  const img = document.getElementById("map");
+		  var region = data["region"]
+                  img.src = `/static/${element}-${region}.tiff.jpg#` + new Date().getTime();
+                  const status = document.getElementById("entered-element");
+                  status.innerHTML = element;
+              }
+          });
+      }
+
+
+      function display_profile (filename) {
+        // the current time is to avoid caching issues.
+          img_src = `/static/${filename}#` + new Date().getTime();
+          update_status("profile-display",`<img src="${img_src}" style="width:{{width|safe}}">`)
+      }
+
+      function display_analyzed_profile (filename) {
+          img_src = `/static/${filename}#` + new Date().getTime();
+          update_status("profile-display",`<img src="${img_src}" style="width:{{width|safe}}">`)
+      }
+
+      function display_smoothed_map (filename) {
+          img_src = `${filename}#` + new Date().getTime();
+          update_status("profile-display",`<img src="${img_src}" style="width:{{width|safe}}">`)
+      }
+
+      function analyze_profile () {
+          $.ajax({
+              url: "/analyze_profile",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: JSON.stringify("PROFILING"),
+              success : function (data) {
+                  display_analyzed_profile(data["filename"]);
+              }
+          });
+      }
+
+      function save_svg() {
+        $.ajax({
+              url: "/save_svg",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: JSON.stringify({"svg":document.getElementById("all-svg").outerHTML,"element":document.getElementById("entered-element").innerHTML}),
+          });
+      }
+
+      function profile_all () {
+	  save_svg();
+          $.ajax({
+              url: "/process_all_elem",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: "PROFILE ALL"
+          });
+      }
+
+      function plot_svg (storage_key,path_id) {
+          $.ajax({
+              url: "/plot_svg",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: JSON.stringify({"storage_key":storage_key}),
+              success : function (data) {
+                  svg_path_def = data["path"];
+		  console.log(svg_path_def);
+                  document.getElementById(path_id).setAttribute("d",svg_path_def);
+              }
+          });
+      }
+
+      function background_rectangle () {
+          $.ajax({
+              url: "/save_bkg_rect",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: JSON.stringify({"xy":all_xy}),
+              success: function (data) {
+                  console.log("Saved");
+                  ctx.reset();
+                  console.log(data);
+                  document.getElementById("svg-bkg-rect").setAttribute("d",data["path"]);
+                  all_xy = [];
+              }
+          });
+          bkg_rect_exists = true;
+          show_class("Smoothing");
+          if (vein_width_exists) {
+          show_class("FullStatus");
+          if (profile_exists) {
+            show_class("AnalyzedProfile");
+            }
+            }
+      }
+
+      function rm_background_rectangle () {
+          $.ajax({
+              url: "/clear_bkg_rect",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: JSON.stringify("RM"),
+              success: function (data) {
+                  ctx.reset();
+                  console.log(data);
+                  document.getElementById("svg-bkg-rect").setAttribute("d","");
+                  all_xy = [];
+              }
+          });
+          bkg_rect_exists = false;
+          hide_class("AnalyzedProfile")
+          hide_class("FullStatus")
+          hide_class("Smoothing")
+      }
+
+      function reset_buttons_display() {
+      classes = ["PreGMTProfile","GMTProfile","PreAnalyzedProfile","AnalyzedProfile","SaveSVG","FullStatus","Smoothing"];
+      for (const class_i of classes) {
+        hide_class(class_i);
+        }
+      }
+
+      function reset_config () {
+          $.ajax({
+              url: "/clear_all",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: "CLEAR",
+              async: false,
+          });
+          reset_buttons_display();
+          document.getElementById("svg-vein-line").setAttribute("d","");
+          document.getElementById("svg-profile-line").setAttribute("d","");
+          document.getElementById("svg-crossselvage-line").setAttribute("d","");
+          document.getElementById("svg-crossvein-line").setAttribute("d","");
+          document.getElementById("svg-bkg-rect").setAttribute("d","");
+      }
+
+      function smooth_map () {
+          $.ajax({
+              url: "/smooth_map",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: "SMOOTH",
+              success : function (data) {
+                  display_smoothed_map(data["filename"]);
+              }
+          });
+      }
+
+      function smooth_all () {
+	  save_svg();
+          $.ajax({
+              url: "/smooth_all",
+              type: "POST",
+              contentType: "application/json;charset=UTF-8",
+              dataType: "json",
+              data: "SMOOTH ALL"
+          });
+      }
+
+      </script>
+      <style>
+      .input-group {
+      margin-top: 10px;
+      }
+
+      .main-action-button {
+      background:#3232e1;
+      color:white;
+      }
+      </style>
+  </head>
+  <body onload="init_canvas();reset_buttons_display();">
+    <main>
+      <img id="map" src="/static/{{element|safe}}-{{region|safe}}.tiff.jpg" style="position:absolute;top:0px;left:0px;" width="{{width|safe}}" height="{{height|safe}}">
+      <svg style="position:absolute;top:0px;left:0px;cursor:pointer;" width="{{width|safe}}" height="{{height|safe}}" id="all-svg">
+	<path id="svg-vein-line" style="fill:none;stroke:red;" d=""/>
+	<path id="svg-profile-line" style="fill:none;stroke:green;stroke-width:7;" d=""/>
+	<path id="svg-crossselvage-line" style="fill:none;stroke:cyan;stroke-width:5;" d=""/>
+	<path id="svg-crossvein-line" style="fill:none;stroke:pink;stroke-width:3;" d=""/>
+	<path id="svg-bkg-rect" style="fill:none;stroke:lightblue;stroke-width:3;" d=""/>
+      </svg>
+
+      <canvas id="canv-map" style="position:absolute;top:0px;left:0px;cursor:pointer;" width="{{width|safe}}" height="{{height|safe}}"></canvas>
+
+      <div id="profile-display" width="{{width|safe}}" style="position:absolute;top:{{height|safe}};left:0px">
+      </div>
+      <div style="position:absolute;top:0px;left:{{width|safe}};display:block;width:100px;text-align:left;margin-left:10px">
+        <div class="input-group">
+        <span style="font-size:0.75em"><b>Element symbol</b></span>
+        <input type="text" id="element" value="">
+        <input type="button" value="Load element" onclick="loadelem()">
+        </div>
+
+        <div class="input-group">
+        <input type="button" value="Clear active drawing" onclick="clearxy()" style="background:#fd6d6d">
+        </div>
+
+        <div class="input-group">
+        <span style="font-size:0.75em"><b>Vein path file</b></span>
+        <input type="text" id="filepath">
+        <input type="button" value="Save" onclick="save_vein()">
+        <input type="button" value="Load" onclick="load_vein_path()">
+        </div>
+
+        <div class="input-group">
+        <input type="button" value="Send profile length" onclick="profile_length()" class="PreGMTProfile" style="color:white;background-color:black">
+        </div>
+
+        <div class="input-group">
+        <input type="button" value="Profile" onclick="gmt_profile()"  class="GMTProfile main-action-button">
+        </div>
+
+        <div class="input-group">
+        <input type="button" value="Send vein width" onclick="vein_width()"  class="PreAnalyzedProfile" style="color:white;background-color:black">
+        <input type="button" value="Send selvage width" onclick="selvage_width()"  class="PreAnalyzedProfile" style="color:white;background-color:black">
+        <input type="button" value="Send bkg rect" onclick="background_rectangle()"  class="PreAnalyzedProfile" style="color:white;background-color:black">
+        <input type="button" value="Clear bkg rect(s)" onclick="rm_background_rectangle()"  class="PreAnalyzedProfile" style="background:#ec4646">
+        </div>
+
+        <div class="input-group">
+        <input type="button" value="Analyse profile" onclick="analyze_profile()" id="analyze_profile"  class="AnalyzedProfile main-action-button">
+        </div>
+
+        <div class="input-group">
+        <input type="button" value="Smooth Map" onclick="smooth_map()"  class="Smoothing main-action-button">
+        </div>
+
+        <div class="input-group">
+        <input type="button" value="Profile All" onclick="profile_all()"  class="FullStatus main-action-button">
+        <input type="button" value="Smooth All" onclick="smooth_all()"  class="Smoothing main-action-button">
+        </div>
+
+        <div class="input-group">
+        <input type="button" value="Save SVG overlay" onclick="save_svg()"  class="SaveSVG">
+        </div>
+
+        <div class="input-group">
+        <input type="button" value="Clear all options" onclick="reset_config()" style="color:white;background:#d91414">
+        </div>
+
+        <div><b>Status</b>
+          <table>
+            <tbody>
+              <tr><td>Element</td><td id="entered-element">{{element|safe}}</td></tr>
+              <tr><td>Vein Definition</td><td id="entered-vein-def">none</td></tr>
+              <tr><td>Profile Length</td><td id="entered-profile-length">none</td></tr>
+              <tr><td>Vein Width</td><td id="entered-vein-width">none</td></tr>
+              <tr><td>Selvage Width</td><td id="entered-selvage-width">none</td></tr>
+            </tbody>
+          </table>
+	</div>
+    </main>
+  </body>
+</html>

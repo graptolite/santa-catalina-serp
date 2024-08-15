@@ -5,4 +5,9 @@
 # Git track only the org notebook sources (to reduce issues with changing id, execution_count etc. in Jupyter notebooks)
 !*.org
 !*.py
+!*.sh
 !*/
+!*.html
+!*.md
+!*.tiff
+!vein_transects/vein-paths/example-path.txt

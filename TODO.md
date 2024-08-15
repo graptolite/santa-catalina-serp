@@ -1,0 +1,5 @@
+- Vein profiling comments for the non-python code.
+- General README.md
+    - Dependencies of each notebook
+    - Purpose of each notebook
+    - Associated figures from the 4th yr report/supp. mat. for each notebook.
