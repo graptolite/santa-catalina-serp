@@ -1,5 +1,4 @@
 - Vein profiling comments for the non-python code.
-- General README.md
-    - Dependencies of each notebook
-    - Purpose of each notebook
-    - Associated figures from the 4th yr report/supp. mat. for each notebook.
+- Upload EDS data.
+- Upload RL scans and data.
+- Add RL grain detection notebooks.

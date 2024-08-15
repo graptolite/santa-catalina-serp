@@ -4,6 +4,8 @@
 
 #+TITLE: XRF Compositional Data Analysis - PCA Plots (R)
 
+* Preliminary
+Requires =notebook.org/.ipynb= to be run beforehand to generate =./local_data/cleaned_normalized_df.csv=.
 * PCA plots
 PCA plots will reduce clustering and also permit interpretation of outliers after considering background scatter within the data (i.e. an outlier in composition space based on high component X may not be an outlier in PCA space if the /scatter of component X is high/ in the dataset). Since the data for PCA is compositional, standard PCA isn't the best approach. Instead, a "robust" approach implemented in =robCompositions= \citep{Templ2011} is used. This implementation is written in the R language only (with no Python equivalent), so the PCA plotting code will be written in R.
 
