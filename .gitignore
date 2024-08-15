@@ -18,3 +18,5 @@
 !*.csv
 !*/imgs/*
 !*/local_data/*
+!*.ipynb
+*/*.ipynb_checkpoints
