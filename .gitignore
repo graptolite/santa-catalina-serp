@@ -21,3 +21,8 @@
 # Notebooks should only be tracked if there's a code update and not  e.g. in case of just an update of cell property (such as execution count).
 !*.ipynb
 */*.ipynb_checkpoints
+*.*
+!**/reflector_processing/*/*.ipynb
+!**/reflector_processing/*/*.py
+!**/reflector_processing/*/imgs/*
+!**/reflector_processing/*/local_data/*

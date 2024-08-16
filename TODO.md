@@ -1,5 +1,4 @@
 - Vein profiling comments for the non-python code.
 - Upload EDS data.
-- Upload RL scans and data.
 - Add RL grain detection notebooks.
 - Avoid tying code to the UNIX filepath system.

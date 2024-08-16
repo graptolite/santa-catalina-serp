@@ -1,6 +1,6 @@
 
 
-# `AGM_magnetic_analysis/notebook.ipynb`
+# AGM\_magnetic\_analysis/notebook.ipynb
 
 
 ## `AGM_magnetic_analysis/notebook.ipynb`
@@ -16,7 +16,7 @@
 `codecs`, `cv2`, `io`, `matplotlib.collections`, `matplotlib.patches`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `re`, `scipy.interpolate`, `scipy.signal`, `sys`
 
 
-# `Clc_orientations/notebook.ipynb`
+# Clc\_orientations/notebook.ipynb
 
 
 ## `Clc_orientations/notebook.ipynb`
@@ -27,7 +27,7 @@
 `matplotlib.pyplot`, `mplstereonet`, `numpy`, `re`
 
 
-# `EBSD_mapping/notebook.ipynb`
+# EBSD\_mapping/notebook.ipynb
 
 
 ## `EBSD_mapping/notebook.ipynb`
@@ -38,7 +38,7 @@
 `io`, `matplotlib.pyplot`, `mpltern.datasets`, `numpy`, `pandas`, `re`
 
 
-# `EPMA_data_analysis/notebook.ipynb`
+# EPMA\_data\_analysis/notebook.ipynb
 
 
 ## `EPMA_data_analysis/notebook.ipynb`
@@ -49,10 +49,10 @@
 `io`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `re`, `requests`
 
 
-# `XRF_to_PEM/XRF-PCA.ipynb`
+# XRF\_to\_PEM/XRF-PCA.ipynb
 
 
-# `XRF_to_PEM/XRF_plots.ipynb`
+# XRF\_to\_PEM/XRF\_plots.ipynb
 
 
 ## `XRF_to_PEM/XRF_plots.ipynb`
@@ -81,7 +81,7 @@
 `numpy`, `pandas`, `re`
 
 
-# `XRF_to_PEM/notebook.ipynb`
+# XRF\_to\_PEM/notebook.ipynb
 
 
 ## `XRF_to_PEM/notebook.ipynb`
@@ -131,7 +131,7 @@
 `matplotlib`, `numpy`
 
 
-# `XRF_to_PEM/results.ipynb`
+# XRF\_to\_PEM/results.ipynb
 
 
 ## `XRF_to_PEM/results.ipynb`
@@ -145,6 +145,14 @@
 ### Python (pip) Modules
 
 `matplotlib.pyplot`, `pandas`
+
+
+## `./XRF_to_PEM/theriak_output_config.py`
+
+
+### Python (pip) Modules
+
+`matplotlib`, `numpy`
 
 
 ## `./XRF_to_PEM/theriak_api.py`
@@ -165,15 +173,7 @@
 `wine`
 
 
-## `./XRF_to_PEM/theriak_output_config.py`
-
-
-### Python (pip) Modules
-
-`matplotlib`, `numpy`
-
-
-# `density_color/notebook.ipynb`
+# density\_color/notebook.ipynb
 
 
 ## `density_color/notebook.ipynb`
@@ -189,7 +189,7 @@
 `PIL`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `scipy.optimize`, `sklearn.metrics`, `sys`
 
 
-# `model_mag_effect/notebook.ipynb`
+# model\_mag\_effect/notebook.ipynb
 
 
 ## `model_mag_effect/notebook.ipynb`
@@ -200,7 +200,7 @@
 `matplotlib.pyplot`, `matplotlib`, `numpy`
 
 
-# `reflector_grain_orientations/notebook.ipynb`
+# reflector\_grain\_orientations/notebook.ipynb
 
 
 ## `reflector_grain_orientations/notebook.ipynb`
@@ -211,7 +211,216 @@
 `PIL`, `cv2`, `matplotlib.collections`, `matplotlib.patches`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `shapely`, `tqdm`
 
 
-# `vein_transects/server.py`
+# reflector\_processing/\*
+
+
+## reflector\_processing/section-scans-Kretz1969/working.ipynb
+
+
+### `reflector_processing/section-scans-Kretz1969/working.ipynb`
+
+1.  Local Modules
+
+    `./reflector_processing/section-scans-full/util_funcs.py`
+
+2.  Python (pip) Modules
+
+    `json`, `matplotlib`, `os`, `pandas`, `scipy.spatial`, `scipy.stats`, `shapely.geometry`, `shapely`, `sys`
+
+
+### `./reflector_processing/section-scans-full/util_funcs.py`
+
+1.  Python (pip) Modules
+
+    `cv2`, `matplotlib.pyplot`, `numpy`, `scipy.optimize`
+
+
+## reflector\_processing/section-scans-full-evaluation/further-analysis.ipynb
+
+
+### `reflector_processing/section-scans-full-evaluation/further-analysis.ipynb`
+
+1.  Local Modules
+
+    `./reflector_processing/section-scans-full-evaluation/area_slicer.py`, `./reflector_processing/section-scans-full/util_funcs.py`
+
+2.  Python (pip) Modules
+
+    `os`, `sys`
+
+
+### `./reflector_processing/section-scans-full/util_funcs.py`
+
+1.  Python (pip) Modules
+
+    `cv2`, `matplotlib.pyplot`, `numpy`, `scipy.optimize`
+
+
+### `./reflector_processing/section-scans-full-evaluation/area_slicer.py`
+
+1.  Local Modules
+
+    `./reflector_processing/section-scans-full/area_processing.py`, `./reflector_processing/section-scans-full/util_funcs.py`
+
+2.  Python (pip) Modules
+
+    `json`, `sys`
+
+
+### `./reflector_processing/section-scans-full/area_processing.py`
+
+1.  Python (pip) Modules
+
+    `cv2`, `numpy`, `os`, `scipy.ndimage`, `scipy.spatial`, `shapely.geometry`
+
+
+## reflector\_processing/section-scans-full-evaluation/working.ipynb
+
+
+### `reflector_processing/section-scans-full-evaluation/working.ipynb`
+
+1.  Local Modules
+
+    `./reflector_processing/section-scans-full/area_processing.py`, `./reflector_processing/section-scans-full/plotting.py`, `./reflector_processing/section-scans-full/util_funcs.py`
+
+2.  Python (pip) Modules
+
+    `json`, `os`, `pandas`, `sys`
+
+
+### `./reflector_processing/section-scans-full/plotting.py`
+
+1.  Local Modules
+
+    `./reflector_processing/section-scans-full/util_funcs.py`
+
+2.  Python (pip) Modules
+
+    `cv2`, `json`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `scipy.spatial`, `shapely.geometry`
+
+
+### `./reflector_processing/section-scans-full/util_funcs.py`
+
+1.  Python (pip) Modules
+
+    `cv2`, `matplotlib.pyplot`, `numpy`, `scipy.optimize`
+
+
+### `./reflector_processing/section-scans-full/area_processing.py`
+
+1.  Python (pip) Modules
+
+    `cv2`, `numpy`, `os`, `scipy.ndimage`, `scipy.spatial`, `shapely.geometry`
+
+
+## reflector\_processing/section-scans-full/working.ipynb
+
+
+### `reflector_processing/section-scans-full/working.ipynb`
+
+1.  Local Modules
+
+    `./reflector_processing/section-scans-full/area_processing.py`, `./reflector_processing/section-scans-full/plotting.py`, `./reflector_processing/section-scans-full/util_funcs.py`
+
+2.  Python (pip) Modules
+
+    `json`, `os`, `pandas`, `scipy.stats`
+
+
+### `./reflector_processing/section-scans-full/plotting.py`
+
+1.  Local Modules
+
+    `./reflector_processing/section-scans-full/util_funcs.py`
+
+2.  Python (pip) Modules
+
+    `cv2`, `json`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `scipy.spatial`, `shapely.geometry`
+
+
+### `./reflector_processing/section-scans-full/util_funcs.py`
+
+1.  Python (pip) Modules
+
+    `cv2`, `matplotlib.pyplot`, `numpy`, `scipy.optimize`
+
+
+### `./reflector_processing/section-scans-full/area_processing.py`
+
+1.  Python (pip) Modules
+
+    `cv2`, `numpy`, `os`, `scipy.ndimage`, `scipy.spatial`, `shapely.geometry`
+
+
+## reflector\_processing/section-scans-refined-full/working.ipynb
+
+
+### `reflector_processing/section-scans-refined-full/working.ipynb`
+
+1.  Local Modules
+
+    `./reflector_processing/section-scans-full/plotting.py`, `./reflector_processing/section-scans-full/util_funcs.py`, `./reflector_processing/section-scans-refined-full/updated_area_processing.py`
+
+2.  Python (pip) Modules
+
+    `json`, `matplotlib`, `os`, `pandas`, `sys`
+
+
+### `./reflector_processing/section-scans-full/plotting.py`
+
+1.  Local Modules
+
+    `./reflector_processing/section-scans-full/util_funcs.py`
+
+2.  Python (pip) Modules
+
+    `cv2`, `json`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `scipy.spatial`, `shapely.geometry`
+
+
+### `./reflector_processing/section-scans-full/util_funcs.py`
+
+1.  Python (pip) Modules
+
+    `cv2`, `matplotlib.pyplot`, `numpy`, `scipy.optimize`
+
+
+### `./reflector_processing/section-scans-refined-full/updated_area_processing.py`
+
+1.  Local Modules
+
+    `./reflector_processing/section-scans-full/util_funcs.py`
+
+2.  Python (pip) Modules
+
+    `cv2`, `numpy`, `os`, `scipy.ndimage`, `scipy.spatial`, `shapely.geometry`, `sys`
+
+
+## reflector\_processing/section-scans-runthrough-example/working.ipynb
+
+
+### `reflector_processing/section-scans-runthrough-example/working.ipynb`
+
+1.  Local Modules
+
+    `./reflector_processing/section-scans-runthrough-example/image_stitcher.py`
+
+2.  Python (pip) Modules
+
+    `cv2`, `json`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `scipy.ndimage`, `scipy.optimize`, `scipy.spatial`, `shapely.geometry`
+
+
+### `./reflector_processing/section-scans-runthrough-example/image_stitcher.py`
+
+1.  Python (pip) Modules
+
+    `PIL`, `hsi`, `numpy`, `os`, `subprocess`, `textwrap`
+
+2.  System Packages
+
+    `convert`, `cpclean`, `cpfind`, `enblend`, `pto_gen`
+
+
+# vein\_transects/server.py
 
 
 ## `vein_transects/server.py`

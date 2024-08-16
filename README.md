@@ -1,23 +1,5 @@
-
-# Table of Contents
-
-1.  [AGM\_magnetic\_analysis/notebook.ipynb](#org03a05c3)
-2.  [Clc\_orientations/notebook.ipynb](#org4f35297)
-3.  [EBSD\_mapping/notebook.ipynb](#org1eb6062)
-4.  [EPMA\_data\_analysis/notebook.ipynb](#org1ca4b10)
-5.  [XRF\_to\_PEM/XRF-PCA.ipynb](#org6940395)
-6.  [XRF\_to\_PEM/XRF\_plots.ipynb](#org9ca0100)
-7.  [XRF\_to\_PEM/notebook.ipynb](#org3ab56b0)
-8.  [XRF\_to\_PEM/results.ipynb](#orgbcb6af4)
-9.  [density\_color/notebook.ipynb](#org8e94573)
-10. [model\_mag\_effect/notebook.ipynb](#orga963203)
-11. [reflector\_grain\_orientations/notebook.ipynb](#org038f80e)
-12. [vein\_transects/server.py](#org4d5cf15)
-
 Code written for a UNIX environment with Python 3.11 and R 4.2.2.
 
-
-<a id="org03a05c3"></a>
 
 # AGM\_magnetic\_analysis/notebook.ipynb
 
@@ -39,8 +21,6 @@ Parse magnetic data produced using the Alternating Gradient Magnetometer at Camb
 `codecs`, `cv2`, `io`, `matplotlib.collections`, `matplotlib.patches`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `re`, `scipy.interpolate`, `scipy.signal`, `sys`
 
 
-<a id="org4f35297"></a>
-
 # Clc\_orientations/notebook.ipynb
 
 Plot half rose diagrams of manually drawn SVG lines that represent the long axes of different features (most notably clinochlore grains) on a thin section scan.
@@ -56,8 +36,6 @@ Plot half rose diagrams of manually drawn SVG lines that represent the long axes
 `matplotlib.pyplot`, `mplstereonet`, `numpy`, `re`
 
 
-<a id="org1eb6062"></a>
-
 # EBSD\_mapping/notebook.ipynb
 
 Plot EBSD orientations (about 3 orthogonal axes) with a ternary (R,G,B) colormap.
@@ -72,8 +50,6 @@ Plot EBSD orientations (about 3 orthogonal axes) with a ternary (R,G,B) colormap
 
 `io`, `matplotlib.pyplot`, `mpltern.datasets`, `numpy`, `pandas`, `re`
 
-
-<a id="org1ca4b10"></a>
 
 # EPMA\_data\_analysis/notebook.ipynb
 
@@ -93,8 +69,6 @@ Also compare compositional properties between early- and late-formed clinochlore
 
 `io`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `re`, `requests`
 
-
-<a id="org6940395"></a>
 
 # XRF\_to\_PEM/XRF-PCA.ipynb
 
@@ -116,8 +90,6 @@ Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
 
 `R`
 
-
-<a id="org9ca0100"></a>
 
 # XRF\_to\_PEM/XRF\_plots.ipynb
 
@@ -142,8 +114,6 @@ Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
 `inkscape`
 
 
-<a id="org3ab56b0"></a>
-
 # XRF\_to\_PEM/notebook.ipynb
 
 Normalize raw XRF compositional data for Phase Equilibrium Modelling (PEM), and execute PEM on all serpentinite samples from the XRF data.
@@ -163,8 +133,6 @@ Normalize raw XRF compositional data for Phase Equilibrium Modelling (PEM), and 
 
 `wine`
 
-
-<a id="orgbcb6af4"></a>
 
 # XRF\_to\_PEM/results.ipynb
 
@@ -187,8 +155,6 @@ Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
 `wine`
 
 
-<a id="org8e94573"></a>
-
 # density\_color/notebook.ipynb
 
 Process data to find sample density and average color properties, and then compare the two for use as serpentinization indicators.
@@ -203,8 +169,6 @@ Process data to find sample density and average color properties, and then compa
 
 `PIL`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `scipy.optimize`, `sklearn.metrics`, `sys`
 
-
-<a id="orga963203"></a>
 
 # model\_mag\_effect/notebook.ipynb
 
@@ -222,11 +186,9 @@ Model the effect of subduction-aligned remanent magnetization on hypothetical, s
 `matplotlib.pyplot`, `matplotlib`, `numpy`
 
 
-<a id="org038f80e"></a>
-
 # reflector\_grain\_orientations/notebook.ipynb
 
-Filter detected reflector grains by area, orientation and elongation, and plot them on top of reflected light scans.
+Filter detected reflector grains by area, orientation and elongation, and plot them on top of reflected light scans. **reflector\_processing/section-scans-refined-full/working.ipynb must be run beforehand** with the same desired `kernel_px` variable from this notebook in the `dilate_erode` variable in that notebook to generate the necessary (filtered) data.
 
 -   `grain-orientation-checking.pdf`
 
@@ -239,7 +201,82 @@ Filter detected reflector grains by area, orientation and elongation, and plot t
 `PIL`, `cv2`, `matplotlib.collections`, `matplotlib.patches`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `shapely`, `tqdm`
 
 
-<a id="org4d5cf15"></a>
+# reflector\_processing/\*
+
+This collection of notebooks captures the iterative improvement of the reflector grain extraction code in the following order:
+
+1.  section-scans-runthrough-example/working.ipynb: demonstrate the algorithm on a small example (extract of real data).
+2.  reflector\_processing/section-scans-full/working.ipynb: apply the algorithm (captured in reflector\_processing/section-scans-full/area\_processing.py) to all samples' RL scans and visualize differences between results from different samples.
+3.  reflector\_processing/section-scans-full-evaluation/working.ipynb: compare the results of the reflector grain extraction algorithm to manually extracted grains for one instance.
+4.  reflector\_processing/section-scans-refined-full/working.ipynb: repeat the process of section-scans-full but without truncating maximum area - i.e. saving an extended reflector grain dataset. These extended datasets may also be used by reflector\_grain\_orientations/notebook.ipynb.
+5.  reflector\_processing/section-scans-full-evaluation/further-analysis.ipynb: visually compare the results of the reflector grain extraction algorithm with slightly different parameters to expected to find the optimal parameter.
+
+
+## reflector\_processing/section-scans-runthrough-example/working.ipynb
+
+
+### Dependencies
+
+1.  Python (pip) Modules
+
+    `PIL`, `cv2`, `hsi` (optional as can be difficult to install/may not work on all systems), `json`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `scipy.ndimage`, `scipy.optimize`, `scipy.spatial`, `shapely.geometry`, `subprocess`, `textwrap`
+
+2.  System Packages
+
+    `ImageMagick`, `Hugin`
+
+
+## reflector\_processing/section-scans-full/working.ipynb
+
+
+### Dependencies
+
+1.  Python (pip) Modules
+
+    `cv2`, `json`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `scipy.ndimage`, `scipy.optimize`, `scipy.spatial`, `scipy.stats`, `shapely.geometry`
+
+
+## reflector\_processing/section-scans-full-evaluation/working.ipynb
+
+
+### Dependencies
+
+1.  Python (pip) Modules
+
+    `cv2`, `json`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `scipy.ndimage`, `scipy.optimize`, `scipy.spatial`, `shapely.geometry`, `sys`
+
+
+## reflector\_processing/section-scans-refined-full/working.ipynb
+
+
+### Dependencies
+
+1.  Python (pip) Modules
+
+    `cv2`, `json`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `scipy.ndimage`, `scipy.optimize`, `scipy.spatial`, `shapely.geometry`, `sys`
+
+
+## reflector\_processing/section-scans-full-evaluation/further-analysis.ipynb
+
+
+### Dependencies
+
+1.  Python (pip) Modules
+
+    `cv2`, `json`, `matplotlib.pyplot`, `numpy`, `os`, `scipy.ndimage`, `scipy.optimize`, `scipy.spatial`, `shapely.geometry`, `sys`
+
+
+## reflector\_processing/section-scans-Kretz1969/working.ipynb
+
+Notebook applying some methods described in the Kretz 1969 paper to check for the evenness of grain distributions. Results not particularly important beyond demonstrating heterogeneity in spatial distribution of grains.
+
+
+### Dependencies
+
+1.  Python (pip) Modules
+
+    `cv2`, `json`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `scipy.optimize`, `scipy.spatial`, `scipy.stats`, `shapely.geometry`, `shapely`, `sys`
+
 
 # vein\_transects/server.py
 
