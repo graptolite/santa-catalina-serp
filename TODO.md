@@ -1,4 +1,4 @@
 - Vein profiling comments for the non-python code.
 - Upload EDS data.
-- Add RL grain detection notebooks.
+- Validate RL grain detection notebooks using the uploaded filestructure.
 - Avoid tying code to the UNIX filepath system.
