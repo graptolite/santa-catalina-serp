@@ -19,9 +19,10 @@ This produces a list of feature orientations for each feature group.
 #+BEGIN_SRC python :session py
 import re
 import numpy as np
+import os
 
 # Parse SVG file containing traced long axes into a string.
-orientations_svg = "./local_data/23C-06C-mag-clc-aligned.svg"
+orientations_svg = os.path.join("local_data","23C-06C-mag-clc-aligned.svg")
 with open(orientations_svg) as infile:
     svg = infile.read()
 # Find all path objects in the SVG (including irrelevant ones).

@@ -68,7 +68,7 @@ PCA_compositions <- function(dataf,keep_only=c("SiO2","MgO","FeO","Fe2O3"),legen
 }
 
 ## Load composition data.
-compositions = "./local_data/cleaned_normalized_df.csv"
+compositions = file.path("local_data","cleaned_normalized_df.csv")
 dataf <- read.csv(compositions,header=TRUE,row.names=1)
 ## Compute derived components (FeTot and Alkalis)
 dataf$FeTot <- 0.9*dataf$Fe2O3 + dataf$FeO

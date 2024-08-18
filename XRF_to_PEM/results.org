@@ -13,12 +13,13 @@ Volume stackplots for subsequent path segments in a rock's history can be placed
 from theriak_api import TheriakAPI,TheriakOutput,group_cols,read_theriak_table
 import matplotlib.pyplot as plt
 import pandas as pd
+import os
 
 # Declare the path stage names that are used to access theriak output data (by providing the filename id necessary to access the stored data for each stage).
 path_stages = ["cooling","serpentinisation","exhumation"]
 
 # Load XRF compositions df.
-df = pd.read_csv("./local_data/df.csv",index_col=0)
+df = pd.read_csv(os.path.join("local_data","df.csv"),index_col=0)
 # Find sample names from index.
 samples = df.index
 
@@ -37,7 +38,7 @@ def stackplot_history(sample):
     # Iterate through path stages.
     for i,path_stage in enumerate(path_stages):
         # Load data for active path stage of the specified sample.
-        df = read_theriak_table(f"./local_data/PEM/{path_stage}-{sample}-loop_table")
+        df = read_theriak_table(os.path.join("local_data","PEM",f"{path_stage}-{sample}-loop_table"))
         # Produce mineral volume stackplots and PTX-path characterisation plots in a column of the sub-axes grid.
         theriak_output = TheriakOutput(df)
         theriak_output.characterize_output(axs=axs[:,i])
@@ -141,11 +142,10 @@ def magnetite_silicate_plots(serp_df):
 # Iterate through samples.
 for sample in samples:
     # Load theriak output table for serpentinisation path for the active sample.
-    serp_df = read_theriak_table(f"./local_data/PEM/serpentinisation-{sample}-loop_table")
+    serp_df = read_theriak_table(os.path.join("local_data","PEM",f"serpentinisation-{sample}-loop_table"))
     # Produce magnetite-silicate volume comparison plots.
     magnetite_silicate_plots(serp_df)
 plt.show()
 #+END_SRC
 
 #+RESULTS:
-: None

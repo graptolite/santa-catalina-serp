@@ -18,7 +18,7 @@ import codecs
 import os
 
 # Declare path to AGM datafiles.
-data_path = "../DATASETS/AGM/"
+data_path = os.path.join("..","DATASETS","AGM")
 # Get list of datafiles.
 files = os.listdir(data_path)
 # Extract list of samples that were analysed.
@@ -73,7 +73,7 @@ This process can be repeated for all samples (with maximum applied field of 2T f
 #+BEGIN_SRC python :session py
 import sys
 # Import observed degree of serpentinization and colormapping data.
-sys.path.insert(0,"../DATASETS/SERP")
+sys.path.insert(0,os.path.join("..","DATASETS","SERP"))
 from sample_serp import serp,cmap
 
 import matplotlib.pyplot as plt
@@ -329,7 +329,7 @@ The degree to which each endmember contributed to the different samples' FORC di
 
 #+BEGIN_SRC python :session py
 # Load endmember proportions data with row-wise samples.
-EM_df = pd.read_csv("./local_data/forc_pca_proportions.csv",index_col=0)
+EM_df = pd.read_csv(os.path.join("local_data","forc_pca_proportions.csv"),index_col=0)
 # Clip proportions to between 0 and 1.
 EM_df = EM_df.clip(0,1)
 # Renormalize endmember proportions data.

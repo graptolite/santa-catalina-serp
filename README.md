@@ -205,10 +205,10 @@ Filter detected reflector grains by area, orientation and elongation, and plot t
 
 This collection of notebooks captures the iterative improvement of the reflector grain extraction code in the following order:
 
-1.  section-scans-runthrough-example/working.ipynb: demonstrate the algorithm on a small example (extract of real data).
+1.  section-scans-runthrough-example/working.ipynb: demonstrate the algorithm on a small example (extract of real data). This algorithm takes the extracted reflector grains and then first performs a dilation (expanding the grain area to merge detected grains that are close together) followed by erode (shrinking the grains by the same amount to remove excess area without removing connections) - this is performed to join together grains that were spurriously disconnected due to imperfections in the magnetite polish surface, imaging etc.
 2.  reflector\_processing/section-scans-full/working.ipynb: apply the algorithm (captured in reflector\_processing/section-scans-full/area\_processing.py) to all samples' RL scans and visualize differences between results from different samples.
-3.  reflector\_processing/section-scans-full-evaluation/working.ipynb: compare the results of the reflector grain extraction algorithm to manually extracted grains for one instance.
-4.  reflector\_processing/section-scans-refined-full/working.ipynb: repeat the process of section-scans-full but without truncating maximum area - i.e. saving an extended reflector grain dataset. These extended datasets may also be used by reflector\_grain\_orientations/notebook.ipynb.
+3.  reflector\_processing/section-scans-full-evaluation/working.ipynb: compare the results of the reflector grain extraction algorithm to manually extracted grains for one instance. Also develop a new processing algorithm where the fine grains are removed prior to the dilate-erode process.
+4.  reflector\_processing/section-scans-refined-full/working.ipynb: repeat the process of section-scans-full but with a removal of fine grains ("noise") prior to the dilate-erode process. Also save post-processed contours without truncating maximum area - i.e. saving an extended reflector grain dataset. These extended datasets may also be used by reflector\_grain\_orientations/notebook.ipynb.
 5.  reflector\_processing/section-scans-full-evaluation/further-analysis.ipynb: visually compare the results of the reflector grain extraction algorithm with slightly different parameters to expected to find the optimal parameter.
 
 

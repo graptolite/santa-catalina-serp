@@ -20,9 +20,9 @@ import numpy as np
 import pandas as pd
 
 # Declare path to save per-sample color data extracted from images.
-color_datafile = "./local_data/colors.csv"
+color_datafile = os.path.join("local_data","colors.csv")
 # Declare folder containing images.
-samples_dir = "../DATASETS/PHYSICAL/sample_imagery/"
+samples_dir = os.path.join("..","DATASETS","PHYSICAL","sample_imagery")
 
 # Check if a previous data save file exists and load color data from there if so.
 if os.path.exists(color_datafile):
@@ -92,7 +92,7 @@ Mass and volume measurement results are stored in =../DATASETS/PHYSICAL/masses_v
 
 #+BEGIN_SRC python :session py
 # Load mass and volume data from disk.
-df = pd.read_csv("../DATASETS/PHYSICAL/masses_volumes.csv",index_col=0)
+df = pd.read_csv(os.path.join("..","DATASETS","PHYSICAL","masses_volumes.csv"),index_col=0)
 # Identify the volume columns (with each set of volume measurements being represented by 3 columns: volume at start, volume after addition of sample, volume capacity of measuring cylinder).
 volume_cols = [c for c in df.columns if "vol" in c]
 # Iterate through the number of measurement sets.
@@ -193,7 +193,7 @@ The lack of a perfect linear relationship between color (value) and density mean
 #+BEGIN_SRC python :session py
 import sys
 # Import observed degree of serpentinization and colormapping data.
-sys.path.insert(0,"../DATASETS/SERP")
+sys.path.insert(0,os.path.join("..","DATASETS","SERP"))
 from sample_serp import serp,cmap
 
 # Place the computed density into the mass dataframe.

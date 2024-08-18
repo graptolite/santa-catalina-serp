@@ -21,7 +21,7 @@ sample = "07A"
 # Declare desired reflector grain "denoising" kernel size used to process the sample (required to construct the datapath).
 kernel_px = 3
 # Construct path to contours data folder for the requested kernel size.
-contours_path = f"../reflector_processing/section-scans-refined-full/contours-modified-{kernel_px}"
+contours_path = os.path.join("..","reflector_processing","section-scans-refined-full",f"contours-modified-{kernel_px}")
 # Load contours data for the requested sample, Note - contours will be enlarged by a factor of 2.
 contours = np.load(os.path.join(contours_path,f"{sample}.png-larger.npy"),allow_pickle=True)
 #+END_SRC
@@ -123,7 +123,7 @@ mpl.use("TkAgg")
 use_max_area = max_areas[0]
 
 # Declare the path to the RL scan images that were also used to detect grains from.
-imgs_path = "../DATASETS/RL_scans/"
+imgs_path = os.path.join("..","DATASETS","RL_scans")
 # Load and plot RL scan.
 img = Image.open(imgs_path+sample+".jpg")
 plt.imshow(img)

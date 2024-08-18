@@ -17,10 +17,11 @@ With there being 5 specimens, whose data is arranged columnwise, and an extra co
 #+BEGIN_SRC python :session py
 import pandas as pd
 import numpy as np
+import os
 
 # Read raw data.
 # There's an empty row in the raw data so set header row to second row (index: 1).
-df = pd.read_excel("../DATASETS/XRF/Serp-P.Lindquist. U.Wash. 11-2023.xlsx",header=1)
+df = pd.read_excel(os.path.join("..","DATASETS","XRF","Serp-P.Lindquist. U.Wash. 11-2023.xlsx"),header=1)
 
 # Ignore columns after the 6th.
 df = df.iloc[:,:6]
@@ -35,7 +36,7 @@ df = df.T
 df.columns = components
 
 # Save parsed df.
-df.to_csv("./local_data/df.csv")
+df.to_csv(os.path.join("local_data","df.csv"))
 #+END_SRC
 
 #+RESULTS:
@@ -74,7 +75,7 @@ norm_dehyd_tot = 100 - H2O
 # Apply the normalizing factor to all columns in the table.
 PEM_df_hyd = PEM_df.mul((norm_dehyd_tot/obs_dehyd_tot),axis=0)
 # Save the renormalized observations database to disk.
-PEM_df_hyd.to_csv("./local_data/cleaned_normalized_df.csv")
+PEM_df_hyd.to_csv(os.path.join("local_data","cleaned_normalized_df.csv"))
 
 # Put correct H2O values back in.
 PEM_df_hyd = PEM_df_hyd.assign(H2O=H2O,tot=PEM_df["dehyd_tot"]+H2O)
@@ -226,7 +227,7 @@ def find_protoliths(compositions_df,table_file_prepend=""):
     # Extract the protolith P-T from serpentinisation path.
     PT = np.array(paths["serpentinisation"])[:,:-1]
     # Initiate theriak input control class with the relevant folder path and file names.
-    theriak_api = TheriakAPI(theriak_dir="./theriak",
+    theriak_api = TheriakAPI(theriak_dir="theriak",
                              ptx_commandfile="path.txt",
                              directive_file="path.directive")
     # Create theriak directive file. This only needs to be run once in this case (thermodynamic database doesn't change).
@@ -250,7 +251,7 @@ def find_protoliths(compositions_df,table_file_prepend=""):
         df = theriak_api.execute_theriak()
         # Move output table to a more permanent location.
         shutil.move(os.path.join(theriak_api.theriak_dir,"loop_table"),
-                    f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table")
+                    os.path.join("local_data","PEM",f"{table_file_prepend}-{sample}-loop_table"))
         # Store df.
         dfs.append(df)
     return dfs
@@ -269,7 +270,7 @@ if force_theriak_rerun:
     dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
 else:
     # Otherwise read data produced by the previous run.
-    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(os.path.join("local_data","PEM",f"{table_file_prepend}-{sample}-loop_table")) for sample in samples]
 #+END_SRC
 
 #+RESULTS:
@@ -350,7 +351,7 @@ def plot_umafic_ternary(umafic_compositions):
     # Create ultramafic protolith ternary plot base.
     ax = plot_umafic_ternary_base()
     # Load polygon definition for expected range of (MOR) mantle.
-    with open("./local_data/Neumann2004_expected_mantle.json") as infile:
+    with open(os.path.join("local_data","Neumann2004_expected_mantle.json")) as infile:
         NA_MOR = json.load(infile)
     # Plot polygon for expected range.
     ax.fill(*np.array(NA_MOR).T,fc="pink",alpha=0.8,zorder=-1,label="Expected range")
@@ -564,7 +565,7 @@ if force_theriak_rerun:
     dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
 else:
     # Load all protoliths data from previous run.
-    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(os.path.join("local_data","PEM",f"{table_file_prepend}-{sample}-loop_table")) for sample in samples]
 #+END_SRC
 
 #+RESULTS:
@@ -702,7 +703,7 @@ if force_theriak_rerun:
     dfs = find_protoliths(dehyd_compositions_df,table_file_prepend=table_file_prepend)
 else:
     # Otherwise read data produced by the previous run.
-    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(os.path.join("local_data","PEM",f"{table_file_prepend}-{sample}-loop_table")) for sample in samples]
 
 plt.figure()
 # Find ultramafic protolith compositions.
@@ -783,7 +784,7 @@ def PT_change_path(composition,TP_path,n_steps,table_file_prepend):
     df = theriak_api.execute_theriak()
     # Move the raw output table file to a more static location.
     shutil.move(os.path.join(theriak_api.theriak_dir,"loop_table"),
-                    f"./local_data/PEM/{table_file_prepend}-loop_table")
+                    os.path.join("local_data","PEM",f"{table_file_prepend}-loop_table"))
     return df
 
 def PT_change_path_all(compositions,TP_path,n_steps,table_file_prepend):
@@ -832,7 +833,7 @@ if force_theriak_rerun:
     dfs = cooling_path_all(n,table_file_prepend=table_file_prepend)
 else:
     # Otherwise read data produced by the previous run.
-    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(os.path.join("local_data","PEM",f"{table_file_prepend}-{sample}-loop_table")) for sample in samples]
 #+END_SRC
 
 #+RESULTS:
@@ -873,7 +874,7 @@ if force_theriak_rerun:
     dfs = exhumation_path_all(n,table_file_prepend=table_file_prepend)
 else:
     # Otherwise read data produced by the previous run.
-    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(os.path.join("local_data","PEM",f"{table_file_prepend}-{sample}-loop_table")) for sample in samples]
 #+END_SRC
 
 #+RESULTS:
@@ -973,7 +974,7 @@ def serpentinisation_path(sample,n_steps,table_file_prepend):
     # Combine stored data.
     combined_df = pd.concat(combined_df,axis=0).fillna(0)
     # Save the combined output table.
-    combined_df.to_csv(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table",index=False)
+    combined_df.to_csv(os.path.join("local_data","PEM",f"{table_file_prepend}-{sample}-loop_table"),index=False)
     return combined_df
 
 def serpentinisation_path_all(n_steps,table_file_prepend):
@@ -1002,7 +1003,7 @@ if force_theriak_rerun:
     dfs = serpentinisation_path_all(n,table_file_prepend=table_file_prepend)
 else:
     # Otherwise read data produced by the previous run.
-    dfs = [read_theriak_table(f"./local_data/PEM/{table_file_prepend}-{sample}-loop_table") for sample in samples]
+    dfs = [read_theriak_table(os.path.join("local_data","PEM",f"{table_file_prepend}-{sample}-loop_table")) for sample in samples]
 #+END_SRC
 
 #+RESULTS:

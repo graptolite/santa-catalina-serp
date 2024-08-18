@@ -10,10 +10,11 @@ This notebook requires =notebook.org= to have been previously run such that =./l
 
 #+BEGIN_SRC python :session py
 import pandas as pd
+import os
 
 # Load composition data.
-df = pd.read_csv("./local_data/df.csv",index_col=0)
-oxide_df = pd.read_csv("./local_data/cleaned_normalized_df.csv",index_col=0)
+df = pd.read_csv(os.path.join("local_data","df.csv"),index_col=0)
+oxide_df = pd.read_csv(os.path.join("local_data","cleaned_normalized_df.csv"),index_col=0)
 
 # Get list of samples.
 samples = df.index
@@ -104,7 +105,7 @@ Geochemical biplots of one oxide against another was used by \cite{Benard2021} t
 #+BEGIN_SRC python :session py
 from svg_parsing import *
 # Declare the filepath to the enhanced SVG file (in the manner described above).
-parent_svgfile = "./local_data/Benard2021_enhanced.svg"
+parent_svgfile = os.path.join("local_data","Benard2021_enhanced.svg")
 # Declare the number of plot columns present in the SVG file (plot collection).
 n_cols = 3
 # Read the SVG file into a string.
@@ -264,7 +265,7 @@ for bottom_left_corner,fig_svg_io,group in zip(bottom_left_corners,fig_svgs,orde
     parent_svg = parent_svg.replace(group,group.replace("</g>",parent_group+"\n</g>"))
 
 # Save the updated parent SVG (i.e. after plots using observed data have been overlain on the parent SVG axes).
-out_svg = "./imgs/Benard2021_plotted.svg"
+out_svg = os.path.join("imgs","Benard2021_plotted.svg")
 with open(out_svg,"w") as outfile:
     outfile.write(parent_svg)
 
