@@ -16,7 +16,7 @@ class AreaSlicer():
         # Area processor for the sample of interest.
         if AP is None:
             # Default to using the pixel to mm conversion factor of 0.001 defined outside this class.
-            AP = AreaProcessor(os.path.join(self.base_folder,f"{sample}.png"),pix2mm=pix2mm,dilate_erode=dilate_erode)
+            AP = AreaProcessor(os.path.join(self.base_folder,f"{sample}.png"),pix2mm=pix2mm,dilate_erode=dilate_erode,load_dir=os.path.join("..","section-scans-full","filtered_data"))
         # Compute patch areas.
         self.patch_areas,_ = AP.find_areas()
         # Allow this area processor to be called within this class (could probably use class inheritance to better handle this...).
@@ -44,7 +44,7 @@ class AreaSlicer():
 
         returns img : cv2 specification image.
         '''
-        img = cv2.imread(os.path.join(self.base_imgs_folder,f"self.sample}.jpg"))
+        img = cv2.imread(os.path.join(self.base_imgs_folder,f"{self.sample}.jpg"))
         return img
 
     def visualise_patches(self,area_slice,RGB,img=None):

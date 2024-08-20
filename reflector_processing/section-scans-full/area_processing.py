@@ -6,7 +6,7 @@ from shapely.geometry import Polygon
 import os
 
 class AreaProcessor():
-    def __init__(self,img_path,pix2mm=None,dilate_erode=None):
+    def __init__(self,img_path,pix2mm=None,dilate_erode=None,load_dir="filtered_data"):
         # Path to the manually thresholded scan containing just reflectors.
         self.img_path = img_path
         # Conversion factor from pixels to mm.
@@ -25,10 +25,10 @@ class AreaProcessor():
         else:
             prepend = "unmodified-"
         # Path to file containing filtered contours after being processed by the requested dilation-erosion pathway.
-        self.load_path = os.path.join("filtered_data",prepend+filename)
+        self.load_path = os.path.join(load_dir,prepend+filename)
 
     def _extract_contours(self):
-        ''' Extract and save the contours of a thresholded scan. Both the "real size" (slightly smaller than actual reflector patches) and enlarged (extracted from image that's been scaled up by a factor of 2) contours are extracted and saved, which permits patch area computation.
+        ''' Extract the contours of a thresholded scan. Both the "real size" (slightly smaller than actual reflector patches) and enlarged (extracted from image that's been scaled up by a factor of 2) contours are extracted and saved, which permits patch area computation.
 
         returns contours : list of cv2-specification "small" contour patches
         larger_contours : list of cv2-specification "large" contour patches
@@ -63,14 +63,10 @@ class AreaProcessor():
         # Becomes [0,0],[1,1], such that the area is 1.
         # This is fixed by determining the number of pixels the patch contour covers in a 2x scaled up image, then performing the operation (larger_contour_areas + 1 - 2 * contour_areas)/2 to find the number of pixels in the original patch.
 
-        larger_img = cv2.resize(final_img,tuple(np.array(final_img.shape)*2)[::-1])
+        larger_img = cv2.resize(final_img,tuple(np.array(final_img.shape)*2)[::-1],interpolation=cv2.INTER_NEAREST)
         # Extract non-zero areas; note cv2.CHAIN_APPROX_NONE prevents simplification of the vector definition of raster patches.
         contours,_ = cv2.findContours(final_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
         larger_contours,_ = cv2.findContours(larger_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
-
-        # Save the contour definitions for future processing.
-        np.save(f"{self.load_path}",np.array(contours,dtype=object))
-        np.save(f"{self.load_path}-larger.npy",np.array(larger_contours,dtype=object))
         return contours,larger_contours
 
     def load_contours(self,force_overwrite=False):

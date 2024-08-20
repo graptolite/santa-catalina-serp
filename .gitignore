@@ -26,4 +26,6 @@
 !**/reflector_processing/*/*.ipynb
 !**/reflector_processing/*/*.py
 !**/reflector_processing/*/imgs/*
+**/reflector_processing/*/imgs/.*
 !**/reflector_processing/*/local_data/*
+!**/reflector_processing/section-scans-runthrough-example/stitch-eg/*

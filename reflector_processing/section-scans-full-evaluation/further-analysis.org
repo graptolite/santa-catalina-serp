@@ -15,14 +15,11 @@ Due to the excessive time consumption of this manual gap filling, automatic gap 
 4. Display the reflector patches of interest after automatic gap filling in one colour, and the other reflector patches after automatic gap filling in another colour.
 5. Visually inspect the difference in reflector patches before and after to see whether the automatic gap filling produces reasonable results (reconstructs a large number of grains that were clearly whole originally without artificially creating too many nonsensical large grains from grains that are clearly separate).
 * Contour Area Slicing
-This involves converting the contour area slicing method to display just contours with areas of interest described in =../section-scans-example/working.org= into a reusable method.
-
-Since area distributions are of the greatest focus, a section whose area distribution changed significantly with increasing (automatic) dilation-erosion (see =../section-scans-full/working.org=) was selected for an initial run of this analysis: M01.
+This involves converting the contour area slicing method to display just contours with areas of interest described in =../section-scans-example/working.org= into a reusable method. This notebook should be run with dilate_erode = each of {0,10,20} (after =../section-scans-full/working.org= is also run with each of those kernel sizes).
 
 #+BEGIN_SRC python :session py
-# Options to change.
-sample = "M01"
-dilate_erode = 10
+# Option to change.
+dilate_erode = 0
 
 from area_slicer import *
 import os
@@ -31,6 +28,7 @@ import sys
 sys.path.insert(0,os.path.join("..","section-scans-full"))
 from util_funcs import *
 
+sample = "M01"
 # Declare conversion factor between pixels and millimeters.
 pix2mm = 0.001
 # Initialize grain filter by area (where the grain detections are specific to a sample *and* dilation erosion kernel size). The contour definitions are created after a dilation-erosion without removal of any grains (i.e. the previous method).
@@ -43,6 +41,8 @@ filtered_grains_img_file = os.path.join("imgs",f"{sample}-{str(dilate_erode)}-sl
 if not os.path.exists(filtered_grains_img_file):
     cv2.imwrite(filtered_grains_img_file,img)
 #+END_SRC
+
+Since area distributions are of the greatest focus, a section whose area distribution changed significantly with increasing (automatic) dilation-erosion (see =../section-scans-full/working.org=) was selected for an initial run of this analysis: M01.
 
 #+RESULTS:
 
@@ -67,9 +67,6 @@ Therefore, it's proposed that grains interpreted as noise on the basis of their 
 This requires a relatively major change to the processing's command flow, as captured by the following code:
 #+BEGIN_SRC python :session py
 import os
-
-# Declare the kernel size for dilation-erosion grain detection processing.
-dilate_erode = 10
 
 def load_unmerged_contours(sample):
     ''' Load unmodified grain contour definitions (both normal size and 2x upscaled). Note: grain contours are not the same as grain boundaries - grain contours are shrunk from the pixel boundaries by half a pixel.
@@ -144,7 +141,7 @@ else:
     # Otherwise just load the EDS map.
     img = cv2.imread(base_image)
 # Initialize area processer that contains the denoised contour collection, and will be applying a dilate-erode processing using the previously specified kernel size.
-AP = AreaProcessor(refined_grain_denoised_img,pix2mm,dilate_erode)
+AP = AreaProcessor(refined_grain_denoised_img,pix2mm,dilate_erode,load_dir=os.path.join("..","section-scans-full","filtered_data"))
 # Load the grain contours after dilate-erode processing (both "real"-size and 2x upscaled).
 contours,larger_contours = AP.load_contours()
 # Initialize grain filter by area (where the grain detections are specific to a sample *and* dilation erosion kernel size).

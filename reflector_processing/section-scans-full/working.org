@@ -58,6 +58,16 @@ alteration_desc = {0:"Partly",
 
 PLT = Plotter(alteration_degree,alteration_desc)
 plot_all = PLT.plot_all
+
+## FOLDER STRUCTURE CHECKS
+# Check if the folder for storing filtered data in is present, and if not, create this folder.
+filtered_data_dir = "filtered_data"
+if not os.path.exists(filtered_data_dir):
+    os.mkdir(filtered_data_dir)
+# Check if the images folder is present, and if not, create this folder.
+imgs_dir = "imgs"
+if not os.path.exists(imgs_dir):
+    os.mkdir(imgs_dir)
 #+END_SRC
 
 #+RESULTS:
@@ -96,27 +106,18 @@ if not os.path.exists(file_prepend + "-areas.json") or FORCE_OVERWRITE:
         contours,larger_contours = AP.load_contours()
         # Retrieve patch areas.
         patch_areas,units = AP.find_areas()
-
         # Find the largest grain area before filtering.
         largest_grain = max(patch_areas)
-
         # Size filtering (selecting only areas larger than 5 pixels, and smaller than 0.05 mm2).
         min_reflector_area = 5 * pix2mm**2 # mm2
         max_reflector_area = 0.05 # mm2
-
         # Construct boolean filter based on grain size.
         size_filter = construct_minmax_filter(patch_areas,min_reflector_area,max_reflector_area)
         # Filter the patch areas using this boolean filter.
         patch_areas = patch_areas[size_filter]
-
         # Filter "small" and "large" contours using this boolean filter.
         contours = list_of_list_filter(contours,size_filter)
         larger_contours = list_of_list_filter(larger_contours,size_filter)
-
-        # Check if the folder for storing filtered data in is present, and if not, create this folder.
-        filtered_data_dir = "filtered_data"
-        if not os.path.exists(filtered_data_dir):
-            os.mkdir(filtered_data_dir)
         # Save the filtered contours if their savefiles aren't already present.
         base_data_file = os.path.join(filtered_data_dir,f"{file_prepend}-{sample}")
         if not os.path.exists(base_data_file + ".npy"):
