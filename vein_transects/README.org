@@ -6,9 +6,8 @@ Type =python server.py= in the console and open [[http://127.0.0.1:5000/]] in a 
 On load, there will be page with an input text box and a button named "Load folder" to its right. This takes the path to the folder containing EDS composition maps. All tiff files in this folder must be element abundance maps, and with the respective element symbol in the file name. *All tiff files must also be the same size* - as such, the folder should contain EDS maps of the same region in a sample. The tiff files should contain only data (no scalebars, headers etc.).
 1. Type the folder into the box. To use the example folder, type =example= into this box.
 2. Press "Load folder".
-3. Refresh the page
 ** EDS Map Analysis
-Upon refresh, the webpage will render control page for EDS map analysis. An arbitrary element map will be loaded purely as a placeholder.
+After the button is pressed, the webpage will render the control page for EDS map analysis. An arbitrary element map will as a placeholder.
 
 Broadly speaking, the buttons will show as needed (i.e. to guide through the process) - however, this shouldn't be relied on at the moment.
 *** Element Loading

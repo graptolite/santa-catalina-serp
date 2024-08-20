@@ -5,22 +5,30 @@
     <title>Vein Profiling</title>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script>
-      function loadfolder () {
-          var element = document.getElementById("folder").value;
-          $.ajax({
-              url: "/load_folder",
-              type: "POST",
-              contentType: "application/json;charset=UTF-8",
-              dataType: "json",
-              data: JSON.stringify(folder.value),
-          });
+      function load_folder () {
+        // Issue request to register the provided folder as the EDS map folder.
+        $.ajax({
+          url: "/load_folder",
+          type: "POST",
+          contentType: "application/json;charset=UTF-8",
+          dataType: "json",
+          data: JSON.stringify(folder.value),
+          success: function (response) {
+            if (response["success"] == 1) {
+              location.reload();
+            } else {
+              document.getElementById("failure").innerHTML = "File not found";
+            }
+          }
+        });
       }
       </script>
   </head>
   <body>
     <main>
       <input type="text" id="folder">
-      <input type="button" value="Load folder" onclick="loadfolder()">
+      <input type="button" value="Load folder" onclick="load_folder()">
+      <div id="failure"></div>
     </main>
   </body>
 </html>

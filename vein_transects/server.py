@@ -390,13 +390,14 @@ def handle_selvage_span(xy_path):
     return
 
 @app.route("/")
-def init():
+def init(load_folder=False):
     ''' Backend code for the landing page.
     '''
     # Make sure no residual background rectanges remain.
     clear_bkg_rect()
+    print(load_folder)
     # Check if a EDS target area has been loaded.
-    if storage["target_area"]:
+    if storage["target_area"] and not load_folder:
         # Load a placeholder or valid config-specified element's converted EDS map.
         element = storage["element"]
         region = Path(storage["target_area"]).parts[-1]
@@ -422,7 +423,10 @@ def load_folder():
     folder = request.data.decode("utf-8").replace("\"","")
     # Assign the provided folder name as the EDS folder path.
     storage["target_area"] = folder
-    return redirect("/")
+    if os.path.exists(folder):
+        return json.dumps({"success":1})
+    else:
+        return json.dumps({"success":0})
 
 @app.route("/store_path", methods=["POST"])
 def store_path():
@@ -702,6 +706,13 @@ def clear_all():
     ''' Completely reset the active storage/config to its state on load.
     '''
     storage = init_storage()
+    return json.dumps({"success":1})
+
+@app.route("/load_new_region", methods=["POST"])
+def load_new_region():
+    ''' Return to the folder loading page to permit loading of a new EDS map region.
+    '''
+    clear_all()
     return json.dumps({"success":1})
 
 if __name__=="__main__":

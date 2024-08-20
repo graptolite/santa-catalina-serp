@@ -953,4 +953,5 @@ def smooth_element_and_plot_vein(data_folder,element,crop,bkg_rect,vein_filepath
     eds_plotter.plot_vein(vein_filepath)
     vein_id = os.path.basename(vein_filepath)
     outfile = eds_plotter.save_smoothed_map(bkg_rect,os.path.join("static",f"{element}-{vein_id}-smoothed.svg"))
-    return outfile
+    img_name = f"{element}-{vein_id}-smoothed.svg"
+    return img_name

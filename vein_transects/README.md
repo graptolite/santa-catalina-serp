@@ -2,7 +2,7 @@
 
 # Starting the App
 
-Type `python server.py` into the console and open <http://127.0.0.1:5000/> in a web browser.
+Type `python server.py` in the console and open <http://127.0.0.1:5000/> in a web browser.
 
 
 # Usage
@@ -14,12 +14,11 @@ On load, there will be page with an input text box and a button named "Load fold
 
 1.  Type the folder into the box. To use the example folder, type `example` into this box.
 2.  Press "Load folder".
-3.  Refresh the page
 
 
 ## EDS Map Analysis
 
-Upon refresh, the webpage will render control page for EDS map analysis. An arbitrary element map will be loaded purely as a placeholder.
+After the button is pressed, the webpage will render the control page for EDS map analysis. An arbitrary element map will as a placeholder.
 
 Broadly speaking, the buttons will show as needed (i.e. to guide through the process) - however, this shouldn't be relied on at the moment.
 
