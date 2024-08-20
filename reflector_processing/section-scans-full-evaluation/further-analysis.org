@@ -15,7 +15,7 @@ Due to the excessive time consumption of this manual gap filling, automatic gap 
 4. Display the reflector patches of interest after automatic gap filling in one colour, and the other reflector patches after automatic gap filling in another colour.
 5. Visually inspect the difference in reflector patches before and after to see whether the automatic gap filling produces reasonable results (reconstructs a large number of grains that were clearly whole originally without artificially creating too many nonsensical large grains from grains that are clearly separate).
 * Contour Area Slicing
-This involves converting the contour area slicing method to display just contours with areas of interest described in =../section-scans-example/working.org= into a reusable method. This notebook should be run with dilate_erode = each of {0,10,20} (after =../section-scans-full/working.org= is also run with each of those kernel sizes).
+This involves converting the contour area slicing method to display just contours with areas of interest described in =../section-scans-example/working.org= into a reusable method. This notebook should be run with =dilate_erode= = each of {0,10,20} (after =../section-scans-full/working.org= is also run with each of those kernel sizes).
 
 #+BEGIN_SRC python :session py
 # Option to change.

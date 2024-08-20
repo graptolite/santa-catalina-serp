@@ -59,6 +59,10 @@ alteration_desc = {0:"Partly",
 
 PLT = Plotter(alteration_degree,alteration_desc)
 plot_all = PLT.plot_all
+
+# Make sure imgs folder exists.
+if not os.path.exists("imgs"):
+    os.mkdir("imgs")
 #+END_SRC
 
 #+RESULTS:
