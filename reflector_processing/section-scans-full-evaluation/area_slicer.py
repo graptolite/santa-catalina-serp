@@ -1,14 +1,14 @@
 import json
-
+import os
 import sys
-sys.path.insert(0,"../section-scans-full")
+sys.path.insert(0,os.path.join("..","section-scans-full"))
 from area_processing import AreaProcessor
 from util_funcs import *
 
 pix2mm = 10**-3
 
 class AreaSlicer():
-    def __init__(self,sample,dilate_erode,base_folder="../section-scans-full/",base_imgs_folder="../../DATASETS/RL_scans",AP=None):
+    def __init__(self,sample,dilate_erode,base_folder=os.path.join("..","section-scans-full"),base_imgs_folder=os.path.join("..","..","DATASETS","RL_scans"),AP=None):
         # Folder containing folders that contain contour definition .npy files for different processing pathways.
         self.base_folder = base_folder
         # Folder containing thresholded reflector images.
@@ -16,7 +16,7 @@ class AreaSlicer():
         # Area processor for the sample of interest.
         if AP is None:
             # Default to using the pixel to mm conversion factor of 0.001 defined outside this class.
-            AP = AreaProcessor(f"{self.base_folder}/{sample}.png",pix2mm=pix2mm,dilate_erode=dilate_erode)
+            AP = AreaProcessor(os.path.join(self.base_folder,f"{sample}.png"),pix2mm=pix2mm,dilate_erode=dilate_erode)
         # Compute patch areas.
         self.patch_areas,_ = AP.find_areas()
         # Allow this area processor to be called within this class (could probably use class inheritance to better handle this...).
@@ -44,7 +44,7 @@ class AreaSlicer():
 
         returns img : cv2 specification image.
         '''
-        img = cv2.imread(f"{self.base_imgs_folder}/{self.sample}.jpg")
+        img = cv2.imread(os.path.join(self.base_imgs_folder,f"self.sample}.jpg"))
         return img
 
     def visualise_patches(self,area_slice,RGB,img=None):

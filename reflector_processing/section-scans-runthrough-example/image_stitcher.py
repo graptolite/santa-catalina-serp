@@ -235,7 +235,7 @@ def stitch_full(sample,do_convert_output=False):
     '''
     original_dir = os.getcwd()
     # Enter the sample's directory.
-    os.chdir(f"{sample}/")
+    os.chdir(f"{sample}")
     # List and string sort all column folders.
     colfolders = sorted([f for f in os.listdir() if f.startswith("col")])
 
@@ -259,15 +259,16 @@ def stitch_full(sample,do_convert_output=False):
 
         print("Handling column")
         # Check if the column output file is present in the sample directory.
-        if not os.path.exists(f"../{outfiles[0]}"):
+        col_outfile = os.path.join("..",outfiles[0])
+        if not os.path.exists(col_outfile):
             # If not, move the column output file from the column directory to the sample directory.
-            os.rename(outfiles[0],f"../{outfiles[0]}")
+            os.rename(outfiles[0],col_outfile)
             # Placeholder file to declare its creation - this can be deleted to force recreation of the column output file.
             with open(outfiles[0],"w") as outfile:
                 outfile.write("placeholder")
         col_outfiles.append(outfiles[0])
         # Exit the column directory.
-        os.chdir("../")
+        os.chdir("..")
 
     # Iteratively combine the column-stitched images until they are all combined into one.
     while len(col_outfiles)>1:

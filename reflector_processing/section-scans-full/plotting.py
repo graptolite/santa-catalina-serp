@@ -6,6 +6,7 @@ import matplotlib as mpl
 mpl.use("TkAgg")
 from scipy.spatial import KDTree
 import json
+import os
 
 from util_funcs import *
 
@@ -24,8 +25,9 @@ def load_filtered_contours(sample,file_prepend):
     returns contours : numpy array of "small" contours
     larger_contours : numpy array of "large" contours
     '''
-    contours = np.load(f"filtered_data/{file_prepend}-{sample}.png.npy",allow_pickle=True)
-    larger_contours = np.load(f"filtered_data/{file_prepend}-{sample}.png-larger.npy",allow_pickle=True)
+    img_file = os.path.join("filtered_data",f"{file_prepend}-{sample}.png")
+    contours = np.load(img_file+".npy",allow_pickle=True)
+    larger_contours = np.load(img_file+"-larger.npy",allow_pickle=True)
     return contours,larger_contours
 
 def load_areas(sample,file_prepend):

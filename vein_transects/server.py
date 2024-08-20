@@ -238,7 +238,7 @@ def EDS_width_height():
     '''
     target_area = storage["target_area"]
     element = storage["element"]
-    return tiff_width_height(f"{target_area}/{element}.tiff")
+    return tiff_width_height(os.path.join(target_area,f"{element}.tiff"))
 
 def invert_y_dir(xy_arr):
     ''' Invert the y direction of an array of xy coordinates based *on the active EDS map dimensions*.
@@ -424,8 +424,8 @@ def load_folder():
     storage["target_area"] = folder
     return redirect("/")
 
-@app.route("/save_path", methods=["POST"])
-def save_path():
+@app.route("/store_path", methods=["POST"])
+def store_path():
     # All stored paths should be in coords relative to TIFF.
     xy_path = request.json["xy"]
     path_def = request.json["def"]
@@ -549,7 +549,7 @@ def analyze_profile():
 
 @app.route("/plot_svg", methods=["POST"])
 def plot_svg():
-    ''' Parse saved coordinates for a requested geometry (using the `storage` dictionary key into SVG path definition format to respond with.
+    ''' Parse stored coordinates for a requested geometry (using the `storage` dictionary key into SVG path definition format to respond with.
     '''
     # Load key from request.
     key = request.json["storage_key"]

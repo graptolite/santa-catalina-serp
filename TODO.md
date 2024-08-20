@@ -1,4 +1,3 @@
 - Vein profiling comments for the non-python code.
 - Upload EDS data.
 - Validate RL grain detection notebooks using the uploaded filestructure.
-- Remove path specificity from .py files in notebooks.

@@ -181,7 +181,7 @@ def load_gmt_profile(element,vein_id):
     Returns: :pandas.DataFrame:
     '''
     # Construct filename to GMT profile output path.
-    datafile = f"tmp/{element}-{vein_id}-stack.dat"
+    datafile = os.path.join("tmp",f"{element}-{vein_id}-stack.dat")
     # Parse the profile file into a pandas dataframe with suitable column names.
     df = pd.read_csv(datafile,delimiter="\s+",names=["distance","stack_val","deviation","min","max","uncert_lower","uncert_higher"])
     return df
@@ -194,7 +194,7 @@ def find_bkg_mean(data_folder,element,bkg_windows):
     bkg_windows | :list: [([x0,y0],[x1,y1])] | List of rectangular window specifications (in [x0,y0],[x1,y1] opposing corners format) to find the overall mean (of pixels contained within) from. May have a length of 1 of only 1 rectangle is of interest. The specific opposing-corner vertices pair doesn't matter.
     '''
     # Load image for the sample region and element of interest.
-    img = Image.open(f"{data_folder}/{element}.tiff")
+    img = Image.open(os.path.join(data_folder,"{element}.tiff"))
     # Compute the mean of pixels within the rectangle collection.
     mean_val = find_rect_mean(bkg_windows,img)
     return mean_val
@@ -587,7 +587,7 @@ class EDSMapPlotter():
             _,ax = plt.subplots()
         self.ax = ax
         # Load relevant image.
-        img = Image.open(f"{data_folder}/{element}.tiff")
+        img = Image.open(os.path.join(data_folder,f"{element}.tiff"))
         self.full_img = img
         # Extract image dimensions
         w0,h0 = img.size
@@ -902,7 +902,7 @@ def plot_cross_profiles(vein,element,study_area):
     Returns: :str:
     '''
     # Load the collection of evenly-spaced profile data as a string.
-    cross_profiles = f"tmp/{element}-{vein}-profile.dat"
+    cross_profiles = os.path.join(tmp,f"{element}-{vein}-profile.dat")
     with open(cross_profiles) as infile:
         raw_cross_profiles_data = infile.read()
     # Parse the profiles collection into a dataframe.

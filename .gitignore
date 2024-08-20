@@ -22,6 +22,7 @@
 !*.ipynb
 */*.ipynb_checkpoints
 *.*
+!**/reflector_processing/*/*.org
 !**/reflector_processing/*/*.ipynb
 !**/reflector_processing/*/*.py
 !**/reflector_processing/*/imgs/*

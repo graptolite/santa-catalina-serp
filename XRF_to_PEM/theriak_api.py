@@ -15,7 +15,7 @@ plt.rcParams.update({"axes.labelsize":12,
 ###
 
 class TheriakAPI():
-    def __init__(self,theriak_dir="./theriak",ptx_commandfile="path.txt",directive_file="path.directive"):
+    def __init__(self,theriak_dir="theriak",ptx_commandfile="path.txt",directive_file="path.directive"):
         # Directory holding the theriak executable and associated files.
         self.theriak_dir = theriak_dir
         # Name for the file into which P-T-X varying commands are to be saved.
