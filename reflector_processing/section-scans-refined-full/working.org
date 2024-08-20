@@ -1,0 +1,1239 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; org-confirm-babel-evaluate: nil; -*-
+# NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
+# NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
+
+#+OPTIONS: toc:nil
+
+#+TITLE: Reflector Area Processing - Refined Method
+
+
+To test the effect of different degrees of gap filling, this notebook was run with dilate erode set to each of [0,10,20] (where 0, None and False are functionally the same). The results of these are displayed statically in the notebook in tables - however, this requires the notebook to be run with =dilate_erode= set to each of 0, 10 and 20 beforehand.
+
+#+BEGIN_SRC python :session py
+FORCE_OVERWRITE = False
+dilate_erode = 10
+
+####################################
+# Don't change anything below here #
+####################################
+if dilate_erode:
+    file_prepend = f"modified-{dilate_erode}"
+else:
+    file_prepend = "unmodified"
+
+import sys
+import os
+sys.path.insert(0,os.path.join("..","section-scans-full"))
+# General util funcs as detailed in ../section_scans-runthrough-example/working.org (or its derivatives)
+from util_funcs import *
+from plotting import *
+
+def save_figure(path):
+    ''' Check if an image containing figure output already exists, otherwise save that figure.
+
+    path (string) : path to save the figure to.
+
+    returns None
+    '''
+    if not os.path.exists(path) or FORCE_OVERWRITE:
+        plt.savefig(path,bbox_inches="tight")
+    return
+
+import pandas as pd
+import json
+
+# Degree of alteration assigned to each section.
+alteration_degree = {"M04":0,
+                     "07A":0,
+                     "M08":0,
+                     "06C":1,
+                     "M07B1":1,
+                     "M07B2":1,
+                     "M01":1,
+                     "M02":2}
+
+# Text descriptions for each level of alteration.
+alteration_desc = {0:"Partly",
+                   1:"Heavily",
+                   2:"V. Heavily"}
+
+PLT = Plotter(alteration_degree,alteration_desc)
+plot_all = PLT.plot_all
+#+END_SRC
+
+#+RESULTS:
+
+* Area Processing
+Using methods detailed in =../section_scans-example/working.org= (or its derivatives), with refinement detailed in =../section_scans-validation/working.org= (or its derivatives), captured by the class =AreaProcessor= in =updated_area_processing.py=
+
+Extracting area contours into .npy files and extracting areas into =areas.json=.
+- =areas.json= is a very large file without linebreaks and so shouldn't be opened with text editors.
+
+As an update/difference to the example processing notebook, the largest grain is also added to the data in =areas.json=.
+
+#+BEGIN_SRC python :session py
+from updated_area_processing import *
+
+pix2mm = 1/1000
+
+# Folder containing thresholded samples (stored as .png).
+# Note: folder linking has been used - this is not the real path.
+samples_dir = os.path.join("..","..","DATASETS","RL_scans")
+
+# Load thresholded sample filenames from the folder.
+samples = [f for f in os.listdir(samples_dir) if f.endswith(".png")]
+
+# Check if the areas datafile needs to be regenerated on the basis of missing file or request.
+# The areas datafile is specific to the processing pathway used to compute the areas (in terms of how much dilation-erosion is applied).
+if not os.path.exists(file_prepend + "-areas.json") or FORCE_OVERWRITE:
+    # Declare dictionary in which areas data will be stored.
+    areas_data = dict()
+    print("(Re)Generating areas.json ...")
+    # Iterate through the samples with thresholded reflectors as identified above.
+    for sample in samples:
+        print(f"Looking at {sample}")
+        # Initiate area processor for the active sample, conversion pixels to mm conversion factor and desired processing pathway.
+        AP = AreaProcessor(os.path.join(samples_dir,sample),pix2mm,dilate_erode)
+        # Retrieve contours.
+        contours,larger_contours = AP.load_contours()
+        # Retrieve patch areas.
+        patch_areas,units = AP.find_areas()
+
+        # Find the largest grain area before filtering.
+        largest_grain = max(patch_areas)
+
+        # Size filtering (selecting only areas smaller than 0.05 mm2; areas are already filtered to greater than 5 px by AP).
+        max_reflector_area = 0.05 # mm2
+
+        # Construct boolean filter based on grain size.
+        size_filter = construct_minmax_filter(patch_areas,None,max_reflector_area)
+        # Filter the patch areas using this boolean filter.
+        patch_areas = patch_areas[size_filter]
+
+        # Filter "small" and "large" contours using this boolean filter.
+        contours = list_of_list_filter(contours,size_filter)
+        larger_contours = list_of_list_filter(larger_contours,size_filter)
+
+        # Check if the folder for storing filtered data in is present, and if not, create this folder.
+        filtered_data_dir = "filtered_data"
+        if not os.path.exists(filtered_data_dir):
+            os.mkdir(filtered_data_dir)
+        # Save the filtered contours if their savefiles aren't already present.
+        base_data_file = os.path.join(filtered_data_dir,f"{file_prepend}-{sample}")
+        if not os.path.exists(base_data_file + ".npy"):
+            np.save(base_data_file + ".npy",np.array(contours,dtype=object))
+            np.save(base_data_file + "-larger.npy",np.array(larger_contours,dtype=object))
+
+        # Extract sample name from sample filename.
+        sample = sample.replace(".png","")
+        # Construct dictionary to place sample-specific area data.
+        areas_data[sample] = dict()
+        # Add reflector patch areas.
+        areas_data[sample]["patch_areas"] = list(patch_areas)
+        # Add the area considered when looking at patch areas.
+        areas_data[sample]["area_studied"] = AP.area_studied()
+        # Add the largest grain observed.
+        areas_data[sample]["largest_grain"] = largest_grain
+    # Save all samples' areas data for this processing pathway.
+    with open(file_prepend + "-areas.json","w") as outfile:
+        json.dump(areas_data,outfile)
+else:
+    print(f"Loading {file_prepend}-areas.json")
+    # Load data from persistent storage.
+    with open(file_prepend + "-areas.json") as infile:
+        areas_data = json.load(infile)
+print("... complete")
+#+END_SRC
+
+#+RESULTS:
+: None
+** Area Distribution Plotting
+On the plots, the area range (x-axis) is hardcoded (to between 0 and 0.05 mm^2).
+
+#+BEGIN_SRC python :session py
+fig = plot_all(PLT.area_distros,file_prepend)
+fig.suptitle("Area Distributions")
+save_figure(os.path.join("imgs",file_prepend + "-area-distro.png"))
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_EXPORT html
+<table>
+<tr>
+<th style="text-align:center">No dilation-erosion</th>
+<th style="text-align:center">10x10 px kernel dilation-erosion</th>
+<th style="text-align:center">20x20 px kernel dilation-erosion</th>
+</tr>
+<tr>
+<th><img src="./imgs/unmodified-area-distro.png"></th>
+<th><img src="./imgs/modified-10-area-distro.png"></th>
+<th><img src="./imgs/modified-20-area-distro.png"></th>
+</tr>
+</table>
+#+END_EXPORT
+*** Discussion
+Observations:
+- The main difference between partially and heavily altered is that the heavily altered distributions appear to overall have broader distributions. However, the difference doesn't seem as obvious at higher degrees of dilation-erosion than before.
+- Increasing dilation-erosion appears to broaden the distributions. However, this effect seems to be much less pronounced than before.
+
+Interpretations
+- Increased alteration increases growth of reflectors, biasing them towards larger sizes.
+- Dilation-erosion causes joining of grains that don't get separated by erosion, and hence a general increase in size. Since this effect was actually amplified more so be the joining/bridging over sub-5 px grains in the original method, the removal of these sub-5 px grains has reduced this issue
+  - The fact that this effect is much less pronouced provides further evidence for the robustness of the new method in recovering actual signals.
+* Reflector Area vs Nearest Neighbour Distance
+On the plots, the area range (x-axis) is hardcoded (to between 0 and 0.05 mm^2), and the nearest neighbour distance is hardcoded (to between 0 and 1 mm).
+
+#+BEGIN_SRC python :session py
+fig = plot_all(PLT.area_vs_nn_dist,file_prepend)
+fig.suptitle("Area vs Nearest Neighbour Distance")
+save_figure(os.path.join("imgs",file_prepend + "-area-nn-dist.png"))
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_EXPORT html
+<table>
+<tr>
+<th style="text-align:center">No dilation-erosion</th>
+<th style="text-align:center">10x10 px kernel dilation-erosion</th>
+<th style="text-align:center">20x20 px kernel dilation-erosion</th>
+</tr>
+<tr>
+<th><img src="./imgs/unmodified-area-nn-dist.png"></th>
+<th><img src="./imgs/modified-10-area-nn-dist.png"></th>
+<th><img src="./imgs/modified-20-area-nn-dist.png"></th>
+</tr>
+</table>
+#+END_EXPORT
+** Discussion
+Observations:
+- There's a large spread of nearest-neighbour distances for the finest grains; as grains become larger, nearest-neighbour distance appears to converge to a value around 0.2 mm.
+- Increasing dilation-erosion increases the modal separation distance (the peak in the distributions of nearest-neighbour distance). This effect is not as pronounced as before.
+- There are more larger grains with increasing dilation-erosion, which means the convergence is clearer. However, there's little difference in the shape of the scatter plot between 10x10 px and 20x20 px.
+
+Interpretations:
+- Increasing dilation-erosion means grains will generally grow in size, such that a lot of low-separation fine grains become merged, hence the increase in modal separation and spreading out towards larger grain sizes.
+* Reflector Aspect Ratios
+On the plots, the aspect ratio range (x-axis) is hardcoded (to between 0 and 20).
+
+#+BEGIN_SRC python :session py
+fig = plot_all(PLT.aspect_ratio_distros,file_prepend)
+fig.suptitle("Aspect Ratio Distributions")
+save_figure(os.path.join("imgs",file_prepend + "-aspect-ratios.png"))
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_EXPORT html
+<table>
+<tr>
+<th style="text-align:center">No dilation-erosion</th>
+<th style="text-align:center">10x10 px kernel dilation-erosion</th>
+<th style="text-align:center">20x20 px kernel dilation-erosion</th>
+</tr>
+<tr>
+<th><img src="./imgs/unmodified-aspect-ratios.png"></th>
+<th><img src="./imgs/modified-10-aspect-ratios.png"></th>
+<th><img src="./imgs/modified-20-aspect-ratios.png"></th>
+</tr>
+</table>
+#+END_EXPORT
+** Discussion
+Observations:
+- The modal aspect ratio is nearest to 1.
+- Aspect ratios are quite variable within each collection of samples with common degrees of alteration.
+- Increasing dilation-erosion has little effect on the shape of these distributions.
+
+Interpretation:
+- There's probably no confident information that can be extracted from these distributions due to a lack of consistency.
+- However, the absence of significant effects on the shape of the distributions with increasing dilation-erosion provides further evidence for the robustness of this new method.
+* Generalised Section Properties Processing
+The generalised section properties (table [[tab:section-prop]]) are section-specific (as opposed to grain-specific) properties that were initially though to be useful to compare between sections.
+
+#+NAME: tab:section-prop
+#+CAPTION: Section-specific properties.
+| Property     | Description                      | Units |
+|--------------+----------------------------------+-------|
+| =convhull=   | area studied                     | mm^2  |
+| =n=          | number of reflectors considered  |       |
+| =total_area= | total area covered by reflectors | mm^2  |
+| =largest=    | area of largest reflector        | mm^2  |
+| =curve_fit=  | area distribution fit parameters |       |
+| =alteration= | quantitative alteration degree   |       |
+|--------------+----------------------------------+-------|
+
+#+BEGIN_SRC python :session py
+# Check if the summaries datafile needs to be regenerated on the basis of missing file or request.
+if not os.path.exists(file_prepend + "-summary.csv") or FORCE_OVERWRITE:
+    data = dict()
+    # Iterate through samples and their area data.
+    for sample,sample_area_data in areas_data.items():
+        # Load patch areas.
+        patch_areas = sample_area_data["patch_areas"]
+        # Load area studied.
+        area_studied = sample_area_data["area_studied"]
+        # Load size of largest grain.
+        largest_grain = sample_area_data["largest_grain"]
+        # Compute distribution parameters for patch areas.
+        # Note 99 rather than 100 as bin_values takes the number of bins rather than bin edges.
+        counts,_,midpoints = bin_values(patch_areas,0.05,99)
+
+        # Construct summary dataframe for each sample.
+        data[sample] = {"convhull":area_studied, # study area
+                        "n":len(patch_areas), # number of discrete reflectors after filtering
+                        "total_area":sum(patch_areas), # area of reflectors after filtering
+                        "largest":largest_grain, # largest continuous reflector patch area
+                        "curve_fit":fit_exp_log_y(midpoints,counts)}
+
+        # Degree of alteration assigned to each section.
+        # Note: alteration_degree is imported from plotting.py
+        try:
+            data[sample]["alteration"] = alteration_degree[sample]
+        except KeyError:
+            pass
+
+    # Convert dictionary to pandas dataframe.
+    df = pd.DataFrame.from_dict(data,orient="index")
+    # Save pandas dataframe to .csv file.
+    df.to_csv(file_prepend + "-summary.csv")
+#+END_SRC
+
+#+RESULTS:
+
+** Comparison Plotting
+After obtaining this data, comparisons can be plotted.
+- In some cases, derived parameters (that are normalised to the area studied) are more useful for comparing between sections.
+  - Reflector coverage area \to reflector coverage percentage.
+  - Reflector count \to reflector number density.
+- Only sections that are partially (0) or heavily (1) altered will be considered in the comparison.
+
+#+BEGIN_SRC python :session py
+# Force load from .csv file so that list processing is standardised.
+df = pd.read_csv(file_prepend + "-summary.csv",index_col=0)
+# Derived parameters that are more logical to compare between sections.
+df["reflector_percentage"] = df["total_area"]/df["convhull"] * 100
+df["number_density"] = df["n"]/df["convhull"]
+
+# Look at only sections that have an alteration index of 1 (heavy) or 0 (partly).
+df = df[(df["alteration"]==1) | (df["alteration"]==0)]
+
+######################################################
+# Comparison between aggregated reflector properties #
+######################################################
+fig,axs = plt.subplots(1,3,constrained_layout=True,figsize=(9,6))
+
+# Plot point for each sample's property.
+axs[0].scatter(df["alteration"],df["largest"])
+axs[1].scatter(df["alteration"],df["number_density"])
+axs[2].scatter(df["alteration"],df["reflector_percentage"])
+
+# Label the sample referred to by each point.
+for s,row in df.iterrows():
+    x = row["alteration"]
+    axs[0].text(x,row["largest"],s)
+    axs[1].text(x,row["number_density"],s)
+    axs[2].text(x,row["reflector_percentage"],s)
+
+# Label the plots with which parameter is being compared.
+axs[0].set_ylabel("Largest reflector area /mm$^2$")
+axs[1].set_ylabel("Reflector number density /mm$^-2$")
+axs[2].set_ylabel("Reflector coverage /%")
+
+# Label the plots with the degree of alteration represented by plotted samples.
+[ax.set_xlabel("Degree of alteration") for ax in axs]
+[ax.set_xticks([0,1],["medium","high"]) for ax in axs]
+
+plt.suptitle("Reflector parameter comparisons between\nmoderately and highly altered rocks")
+save_figure(os.path.join("imgs",file_prepend + "-refl-param-comparison.png"))
+
+#############################################
+# Comparison between area distribution fits #
+#############################################
+fig,axs = plt.subplots(1,2,constrained_layout=True,figsize=(6,6))
+
+# Load curve fit data.
+curve_fits = np.array(json.loads("[" + ",".join(df["curve_fit"]) + "]"))
+
+# Plot point for each sample's property.
+axs[0].scatter(df["alteration"],curve_fits[:,0]/df["n"])
+axs[1].scatter(df["alteration"],curve_fits[:,1])
+
+# Label the plots with which parameter is being compared.
+axs[0].set_ylabel("a/n")
+axs[1].set_ylabel("b")
+
+# Label the sample referred to by each point.
+for i,alt in enumerate(zip(curve_fits[:,0]/df["n"],curve_fits[:,1])):
+    s = df.iloc[i].name
+    x = df.iloc[i]["alteration"]
+    axs[0].text(x,alt[0],s)
+    axs[1].text(x,alt[1],s)
+
+# Label the plots with the degree of alteration represented by plotted samples.
+[ax.set_xlabel("Degree of alteration") for ax in axs]
+[ax.set_xticks([0,1],["medium","high"]) for ax in axs]
+
+plt.suptitle("Fit parameter values in area distribution curve fit of format: $10^{a \cdot \exp(b x)}$")
+save_figure(os.path.join("imgs",file_prepend + "-area_fit_param_comp.png"))
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+For the area distribution curve fits, and interpretation of the parameters' meanings are:
+- $a$: height of the distribution at the start such that $a/n$ is the height normalised by the number of reflectors (to permit comparison between sections). The larger $|a/n|$ is, the taller the start of the distribution relative to higher values.
+- $b$: measure of "decay" rate of the negative exponential distribution. The larger $|b|$ is, the narrower the distribution.
+*** Reflector Parameter Comparison
+#+BEGIN_EXPORT html
+<table>
+<tr>
+<th style="text-align:center">No dilation-erosion</th>
+<th style="text-align:center">10x10 px kernel dilation-erosion</th>
+<th style="text-align:center">20x20 px kernel dilation-erosion</th>
+</tr>
+<tr>
+<th><img src="./imgs/unmodified-refl-param-comparison.png"></th>
+<th><img src="./imgs/modified-10-refl-param-comparison.png"></th>
+<th><img src="./imgs/modified-20-refl-param-comparison.png"></th>
+</tr>
+</table>
+#+END_EXPORT
+**** Discussion
+Observations:
+- There's a narrowing of the range of values towards the smaller end for the largest parameter area with increasing alteration. This narrowing is more pronounced with increasing dilation-erosion.
+- The reflector number density appears to broaden in range with increasing alteration.
+- The reflector coverage appears to broaden in range and slightly increase with increasing alteration but only clearly so at 20x20 px dilation-erosion.
+
+Interpretation:
+- Due to the greater effect of heterogeneity on larger grains, the difference in largest grain sizes can't be confidently interpreted.
+- Broadening of number density and coverage suggests that increasing alteration can either have little effect on reflector number density, or can increase it.
+- The effect of different amounts of dilation-erosion is not as important in determining how clear these changes in range are.
+*** Area Distribution Comparison
+#+BEGIN_EXPORT html
+<table>
+<tr>
+<th style="text-align:center">No dilation-erosion</th>
+<th style="text-align:center">10x10 px kernel dilation-erosion</th>
+<th style="text-align:center">20x20 px kernel dilation-erosion</th>
+</tr>
+<tr>
+<th><img src="./imgs/unmodified-area_fit_param_comp.png"></th>
+<th><img src="./imgs/modified-10-area_fit_param_comp.png"></th>
+<th><img src="./imgs/modified-20-area_fit_param_comp.png"></th>
+</tr>
+</table>
+#+END_EXPORT
+**** Discussion
+Observations:
+- $a/n$ generally broadens with increasing alteration. The amount of dilation-erosion has little effect on this.
+- $b$ generally decreases lower magnitudes with increasing alteration, with this effect being more pronounced with increasing dilation-erosion.
+
+Interpretations:
+- Increasing alteration can change the relative size of the lowest area bin in different directions.
+- Increasing alteration generally broadens the area distribution (decreases magnitude of $b$), with this effect being more obvious with increasing dilation-erosion.
+* Sample Property Aggregation
+Area distributions can be aggregated and differenced to make inferences on the grain population produced with increasing hydration.
+
+Looking at just the partially vs heavily altered sections (as the very heavily altered section just has one entry and is uncertain anyway):
+
+#+BEGIN_SRC python :session py
+# Overwriting the imported sample list with just the samples of interest (i.e. that have alteration indices of either 0 or 1).
+alteration_degree = {k:v for k,v in alteration_degree.items() if v in [0,1]}
+#+END_SRC
+
+#+RESULTS:
+
+Loading area data and defining how it's being binned:
+
+#+BEGIN_SRC python :session py
+with open(file_prepend + "-areas.json") as infile:
+    data = json.load(infile)
+
+# Hardcoded maximum area to define bins with.
+max_area = 0.05 # mm^2
+bins = np.linspace(0,max_area,100)
+# Compute bin midpoints.
+midpoints = (bins[1:] + bins[:-1])/2
+# Function to normalise data.
+norm = lambda x : np.array(x)/sum(x)
+#+END_SRC
+
+#+RESULTS:
+
+Grouping normalised area distributions by degree of alteration, with each distribution weighted by how much area was studied to produce the distribution.
+
+#+BEGIN_SRC python :session py
+# Declare dictionary in which data will be aggregated.
+grouped_data = dict()
+# Iterate through sample data.
+for key,area_data in data.items():
+    # Extract areas data.
+    areas = area_data["patch_areas"]
+    # Extract the area studied.
+    studied_area = area_data["area_studied"]
+    # Check if the sample is of interest.
+    if key in alteration_degree:
+        # If so, extract the degree of alteration of the sample.
+        alteration = alteration_degree[key]
+        # Check if the degree of alteration of interest already has a preallocated data structure in the top-level dictionary dataframe.
+        if not alteration in grouped_data:
+            # If not, create this data structure.
+            grouped_data[alteration] = {"distribution":[],
+                                        "n":0}
+        # Compute area distribution via histogram.
+        counts,_ = np.histogram(areas,bins=bins)
+        # Normalise the distribution.
+        normed_counts = norm(counts)
+        # Weight the distribution by the amount of area studied to produce that distribution.
+        weighted_counts = studied_area * normed_counts
+        # Store the distribution.
+        grouped_data[alteration]["distribution"].append(weighted_counts)
+        # Add to the number of reflector patches considered for sections of the active degree of alteration.
+        grouped_data[alteration]["n"] += len(areas)
+
+# Aggregate and normalise the distributions.
+partially_altered = norm(np.sum(np.array(grouped_data[0]["distribution"]),axis=0))
+heavily_altered = norm(np.sum(np.array(grouped_data[1]["distribution"]),axis=0))
+#+END_SRC
+
+#+RESULTS:
+
+Fitting a combined exponential and order 1 polynomial decay function to the distributions, and then saving the results of the fit to permit later investigation of the robustness of difference of distributions.
+- Note: the combined exponential-polynomial function is used here since fitting with just an exponential function (as with the individual area distributions) produces nonsensical results - this can be seen when =fit_func= is changed to =exp_func=.
+
+#+BEGIN_SRC python :session py
+# Function used for fitting.
+fit_func = exp_with_first_order_p_func
+
+# Only fit to positive values (i.e. where the count is not zero).
+fitting_p = partially_altered>0
+fitting_h = heavily_altered>0
+
+# Determine fit parameters.
+popt_p,_ = curve_fit(fit_func,
+                     midpoints[fitting_p],np.log10(partially_altered[fitting_p]))
+popt_h,_ = curve_fit(fit_func,
+                     midpoints[fitting_h],np.log10(heavily_altered[fitting_h]))
+
+# Save fit parameters.
+with open(file_prepend + "-distribution_fits.json","w") as outfile:
+    json.dump({"partial":popt_p.tolist(),
+               "heavy":popt_h.tolist(),
+               "bins":bins.tolist()},
+              outfile)
+#+END_SRC
+
+#+RESULTS:
+
+** Plotting Aggregated Distributions
+#+BEGIN_SRC python :session py
+# Plot the aggregated area distribution for partially altered samples, as well as the fit.
+plt.stairs(partially_altered,bins,label="partially",color="b")
+plt.plot(midpoints,10**fit_func(midpoints,*popt_p),c="b")
+# Plot the aggregated area distribution for heavily altered samples, as well as the fit.
+plt.stairs(heavily_altered,bins,label="heavily",color="g")
+plt.plot(midpoints,10**fit_func(midpoints,*popt_h),c="g")
+
+# Set y axis to log scale.
+plt.gca().set_yscale("log")
+# Label axes.
+plt.xlabel("Area /mm$^2$")
+plt.ylabel("Frequency")
+# Display legend.
+plt.legend()
+
+save_figure(os.path.join("imgs",file_prepend+"-partially-vs-heavily-altered.png"))
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+Generally speaking, these fits are not great ...
+
+#+BEGIN_EXPORT html
+<table>
+<tr>
+<th style="text-align:center">No dilation-erosion</th>
+<th style="text-align:center">10x10 px kernel dilation-erosion</th>
+<th style="text-align:center">20x20 px kernel dilation-erosion</th>
+</tr>
+<tr>
+<th><img src="./imgs/unmodified-partially-vs-heavily-altered.png"></th>
+<th><img src="./imgs/modified-10-partially-vs-heavily-altered.png"></th>
+<th><img src="./imgs/modified-20-partially-vs-heavily-altered.png"></th>
+</tr>
+</table>
+#+END_EXPORT
+*** Discussion
+[2023-12-06 Wed 15:48]
+Observations:
+- These fits aren't great (even ignoring the semilog nature of these plots)
+
+Interpretation:
+- A better fit function may be needed - or manually drawing continuous distributions?
+** Plotting Differenced Distributions
+Plotting the difference in heavily altered distribution and partially altered distribution to characterise the change following increasing alteration.
+#+BEGIN_SRC python :session py
+# Compute difference in distributions.
+diff = heavily_altered-partially_altered
+# Plot horizontal line at y=0.
+plt.axhline(0,c="lightblue",linestyle="--")
+# Plot difference in distributions.
+plt.stairs(diff,bins,label="heavily-partially altered freqs.",color="k")
+# Label axes.
+plt.xlabel("Area /mm$^2$")
+plt.ylabel("Heavily minus Partially altered Freq. Diff.")
+
+save_figure(os.path.join("imgs",file_prepend+"-heavily-minus-partially-altered.png"))
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+#+BEGIN_EXPORT html
+<table>
+<tr>
+<th style="text-align:center">No dilation-erosion</th>
+<th style="text-align:center">10x10 px kernel dilation-erosion</th>
+<th style="text-align:center">20x20 px kernel dilation-erosion</th>
+</tr>
+<tr>
+<th><img src="./imgs/unmodified-heavily-minus-partially-altered.png"></th>
+<th><img src="./imgs/modified-10-heavily-minus-partially-altered.png"></th>
+<th><img src="./imgs/modified-20-heavily-minus-partially-altered.png"></th>
+</tr>
+</table>
+#+END_EXPORT
+*** Discussion
+The previous observation that there's a decrease in the proportion of some finer grain size, with an increase in grains just coarser, and that increase decaying with increasing grain size up to ~0.02 mm^2 (as opposed to 0.01 mm^2 before) is still present but much weaker.
+- The previous interpretation that this was caused by a process that removed finer grains and "reprecipitated" them on other fine grains to coarsen then is still correct, but the mechanism is not geological, but rather an artefact of the dilation-erosion process: smaller grains are merged by this processing (removing the number of smaller grains but increasing the amount of slightly larger grains). The effect of this is especially clear when a 20x20 px kernel is used.
+
+So reduce the effect of randomness, a smaller number of bins can be used when plotting the diagram of focus (i.e. results of processing with the 10x10 px kernel).
+
+#+CAPTION: 50 bins
+[[./imgs/modified-10-heavily-minus-partially-altered-bins50.png]]
+
+#+CAPTION: 20 bins
+[[./imgs/modified-10-heavily-minus-partially-altered-bins20.png]]
+
+Though there does seem to be a very approximate decrease in the proportion of finer grains, followed by an increase in the proportion of slightly coarser grains, this effect is not as clear.
+
+The potentially oscillatory nature of the difference in distributions that "dampens" with increasing reflector area may also suggest this is an effect of random variation whose magnitude decreases with lesser observations (i.e. there were many small grains observed so randomness could produce significant variations in the normalised aggregated distributions around the small-area end of the distribution; there were few larger grains observed so even if there was randomness, the smaller numbers within the tail of the area distribution means it would appear smaller on the plot of difference).
+
+One possible way of testing this hypothesis is by dividing the each bin in the difference graph by the inverse of the sum of the frequencies in the corresponding bin from the area distribution (i.e. such that the resultant metric is effectively a measure of how large the change is relative to how many samples are in the bin). If randomness was in fact the cause, then the resultant "normalised" difference should oscillate with increasing magnitude at larger areas (since smaller counts should result in a greater effect of randomness).
+
+#+BEGIN_SRC python :session py
+# Compute difference in distributions.
+diff = heavily_altered-partially_altered
+bin_sum = heavily_altered+partially_altered
+normed_diff = diff/bin_sum
+# Plot horizontal line at y=0.
+plt.axhline(0,c="lightblue",linestyle="--")
+# Plot difference in distributions
+plt.stairs(normed_diff,bins,label="heavily-partially altered freqs.",color="k")
+plt.xlabel("Area /mm$^2$")
+plt.ylabel("\"Normalised\" Heavily minus Partially altered Freq. Diff.")
+save_figure(os.path.join("imgs",file_prepend+"-heavily-minus-partially-altered-normed.png"))
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+This *is* seen, which means the difference at very small areas is insufficiently robust to interpret further (i.e. is more likely an inherent effect of the data rather than geological processes).
+
+However, the gradient of increase is steeper than the gradient of decrease, which provides further evidence for there broadly being more coarser grains in the heavily altered vs partly altered sections even at small areas in the area distribution (i.e. the area distributions for the heavily altered sections are generally broader than the area distributions for the partly altered sections).
+- Where the normalised difference is -1 or 1, it means that in one of the distributions, there's zero frequency within that bin, but in the other distribution, there's a non-zero frequency.
+
+[[./imgs/annot-modified-10-heavily-minus-partially-altered-normed.png]]
+
+Since the effect of "normalisation" means the difference is amplified with reducing number of observations, and the number of observations reduces with size, normalisation effectively amplifies the effect of differences in larger grains.
+
+#+BEGIN_SRC python :session py
+positive_normed_diff = sum(normed_diff[normed_diff > 0])
+negative_normed_diff = abs(sum(normed_diff[normed_diff < 0]))
+print(f"Summed positive change {positive_normed_diff}\nSummed negative change {negative_normed_diff}")
+#+END_SRC
+
+#+RESULTS:
+: None
+
+Since there's more net positive change than negative change, it can be concluded that increasing alteration increases frequencies in the tail (larger areas) of the area distribution - which contradicts the curve fits above (where the tail of the fit to heavily altered distribution is below that of the partly altered distribution).
+** Random Sampling Analysis
+To confirm some of the inferences made in the previous discussion on the shape of the difference, random sampling can be used:
+1. Generate two random samples from the same distribution (e.g. partially altered grain areas distribution). The size of these samples should correspond to the sizes of the samples used to produce the aggregated distributions (i.e. one sample should have the same size as the data used to generate the aggregated partially-altered distribution, and the other the same size as the data used to generate the aggregated heavily-altered distribution). This will result in uneven sample sizes.
+2. Find the normalised distribution of these random samples
+3. Find the difference of these normalised distributions in the same direction as used with the real data (i.e. the random sample that is the same size as the heavily-altered distribution minus the random sample that is the same size as the less heavily-altered distribution). Find also the relative difference in the same was as with the real data (difference of bins/sum of bins).
+4. Plot the two types of difference.
+
+Since the two random samples are coming from the same distribution, if the resulting pattern is similar to the ones that were interpreted in the context of different distributions above, then those interpretations are invalidated since it would suggest those patterns could be a result of random sampling from the _same_ distribution.
+- Note: though a curve fit is used as the probability distribution for generating random samples, the fact that only one curve fit is used means the issue of unsuitability for use in comparing different distributions is avoided.
+
+#+BEGIN_SRC python :session py
+# Number of items in each sample based on how many were present in the data.
+n_partly_altered = grouped_data[0]["n"]
+n_heavily_altered = grouped_data[1]["n"]
+
+# Print number of items in each sample.
+print(f"Number in first sample (partly-altered): {n_partly_altered}\nNumber in second sample (heavily-altered): {n_heavily_altered}")
+
+# Load the distribution fits data.
+with open(file_prepend + "-distribution_fits.json") as infile:
+    data = json.load(infile)
+# Extract fit parameters.
+fit_p = data["partial"]
+fit_h = data["heavy"]
+# Extract bins used to produce the distributions that the fit parameters were derived from.
+bins = np.array(data["bins"])
+# Compute the midpoints of these bins.
+midpoints = (bins[:-1] + bins[1:])/2
+
+# Function to construct a discrete probability distribution (for specified x values) applicable to the fit function used to produce the fit parameters above.
+p_x = lambda x,fit : 10**exp_with_first_order_p_func(x,*fit)
+# Various partial functions:
+p_x_p = lambda x : p_x(x,fit1)
+p_x_h = lambda x : p_x(x,fit2)
+p = lambda fit : p_x(midpoints,fit)
+# Discrete probability distributions.
+p_p = p(fit_p)
+p_h = p(fit_h)
+
+# Function to normalise data.
+norm = lambda x : x/sum(x)
+
+# Initiate random number generator.
+rng = np.random.default_rng()
+
+# Random sample based on the partially-altered distribution with the first sample's size.
+rand_a = rng.choice(midpoints,size=n_partly_altered,p=norm(p_p))
+# Random sample based on the heavily-altered distribution with the second sample's size.
+rand_b = rng.choice(midpoints,size=n_heavily_altered,p=norm(p_p))
+
+# Bin the data.
+count_a,_ = np.histogram(rand_a,bins)
+count_b,_ = np.histogram(rand_b,bins)
+# Normalise the binned data (i.e. to produce frequencies from counts).
+count_a = norm(count_a)
+count_b = norm(count_b)
+# Find the absolute difference in normalised data.
+diff = count_b-count_a
+# Find the relative difference in normalised data.
+diff_relative = diff/(count_b+count_a)
+# Find the net additions (sum of positive bins of relative difference).
+additions = sum(diff_relative[diff_relative>0])
+# Find the net removals (magnitude of the sum of negative bins of relative difference).
+removals = abs(sum(diff_relative[diff_relative<0]))
+
+# Define a plot layout.
+fig,axs = plt.subplots(2,1,constrained_layout=True,figsize=(6,6))
+
+# Plot horizontal line at y=0.
+axs[0].axhline(0,c="lightblue",linestyle="--")
+# Plot the "distribution" of absolute difference in normalised data.
+axs[0].stairs(diff,bins)
+axs[0].set_ylabel("Difference in frequency")
+
+# Plot horizontal line at y=0.
+axs[1].axhline(0,c="lightblue",linestyle="--")
+# Plot the "distribution" of relative difference in normalised data.
+axs[1].stairs(diff_relative,bins)
+axs[1].set_ylabel("Relative difference in frequency")
+
+# Label just the x axis of the lower plot (since the horizontal axes are the same).
+axs[1].set_xlabel("Area /mm$^2$")
+# Display the net addition and net removals (relevant to the relative differences) in the title.
+axs[1].set_title(f"Net addition: {additions:.2f}\nNet removal: {removals:.2f}")
+
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+In the plot of absolute difference in frequency against grain area, it's clear that there is in fact an oscillatory trend that decreases with increasing area, which means the observed trend of a decreased proportion of finest grains with increased proportions of slightly coarser grains is not robust and so should not be interpreted.
+
+In the plot of relative difference in frequency against grain area, there's usually a greater net addition (sum of positive bins) than net removal (sum of negative bins). Though the shapes of these distributions can't be strengthened by repeats (repeats would reduce differences since they're related to randomness - i.e. the trends would approach a horizontal line at zero), repeats could be used to investigate the difference between net addition and removal.
+
+#+BEGIN_SRC python :session py
+# Number of repeats.
+n_repeats = 500
+
+# Define lists to which the observed net additions and removals (in relative differences) can be stored.
+all_additions = []
+all_removals = []
+
+# Repeat the "experiment".
+for i in range(n_repeats):
+    # Random sample based on the partly-altered distribution with the first sample's size.
+    rand_a = rng.choice(midpoints,size=n_partly_altered,p=norm(p_p))
+    # Random sample based on the heavily-altered distribution with the second sample's size.
+    rand_b = rng.choice(midpoints,size=n_heavily_altered,p=norm(p_p))
+
+    # Bin the data.
+    count_a,_ = np.histogram(rand_a,bins)
+    count_b,_ = np.histogram(rand_b,bins)
+    # Normalise the binned data (i.e. to produce frequencies from counts).
+    count_a = norm(count_a)
+    count_b = norm(count_b)
+    # Find the absolute difference in normalised data.
+    diff = count_b-count_a
+    # Find the relative difference in normalised data.
+    diff_normed = diff/(count_b+count_a)
+    # Find the net additions (sum of positive bins of relative difference).
+    additions = sum(diff_normed[diff_normed>0])
+    # Find the net removals (magnitude of the sum of negative bins of relative difference).
+    removals = abs(sum(diff_normed[diff_normed<0]))
+    # Store the observed net additions.
+    all_additions.append(additions)
+    # Store the observed net removals.
+    all_removals.append(removals)
+
+# Produce boxplots showing the distribution of net additions and net removals.
+plt.boxplot([all_additions,all_removals])
+# Label axes.
+plt.ylabel("Net/Sum")
+plt.gca().set_xticks([1,2],["additions","removals"])
+
+plt.title("Difference between net additions and removals in relative differences")
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+From this plot, it's clear that randomness alone _can_ generate larger net addition than net removal. Hence the previous interpretation that the larger net addition represented an increase in the tail of the area distribution is not robust. Instead, it's likely this difference is caused by a difference in sample sizes (since that's the only other "variable"). Furthermore previous interpretations on the initial gradients (magnitude of positive vs negative gradient) will also be discounted.
+
+To verify whether the difference between net addition and net removal is a result of uneven sample sizes, the above analysis is repeated below with the same sample sizes (above code block repeated but with the random samples being the same size):
+
+#+BEGIN_SRC python :session py
+# Number of repeats.
+n_repeats = 500
+
+# Define lists to which the observed net additions and removals (in relative differences) can be stored.
+all_additions = []
+all_removals = []
+
+# Repeat the "experiment".
+for i in range(n_repeats):
+    # Random sample based on the partly-altered distribution with the first sample's size.
+    rand_a = rng.choice(midpoints,size=n_partly_altered,p=norm(p_p))
+    # Random sample based on the heavily-altered distribution with the second sample's size.
+    rand_b = rng.choice(midpoints,size=n_partly_altered,p=norm(p_p))
+
+    # Bin the data.
+    count_a,_ = np.histogram(rand_a,bins)
+    count_b,_ = np.histogram(rand_b,bins)
+    # Normalise the binned data (i.e. to produce frequencies from counts).
+    count_a = norm(count_a)
+    count_b = norm(count_b)
+    # Find the absolute difference in normalised data.
+    diff = count_b-count_a
+    # Find the relative difference in normalised data.
+    diff_normed = diff/(count_b+count_a)
+    # Find the net additions (sum of positive bins of relative difference).
+    additions = sum(diff_normed[diff_normed>0])
+    # Find the net removals (magnitude of the sum of negative bins of relative difference).
+    removals = abs(sum(diff_normed[diff_normed<0]))
+    # Store the observed net additions.
+    all_additions.append(additions)
+    # Store the observed net removals.
+    all_removals.append(removals)
+
+# Produce boxplots showing the distribution of net additions and net removals.
+plt.boxplot([all_additions,all_removals])
+# Label axes.
+plt.ylabel("Net/Sum")
+plt.gca().set_xticks([1,2],["additions","removals"])
+
+plt.title("Difference between net additions and removals in relative differences")
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+The similar net additions and removals when using the same sample size confirms the suspicion that differences in sample size was the cause.
+
+With sample size affecting area distribution so much, another issue with the above analysis arises - are the partly-altered sample distributions thinner than the heavily-altered sample distributions due to a geological or statistical mechanism? Could thinner distributions be generated by subsampling a thicker distribution?
+* Are Partially Altered Area Distributions Thinner due to Geological or Statistical Mechanisms?
+Looking at non-aggregated area distribution shapes:
+1. Take a continuous distribution of the form $n = 10^{\alpha\exp(\beta A)}$ where $n$ is count, $A$ is area and $\alpha$ and $\beta$ are constants (fit parameters). The constants of this parent distribution are set to realistic values as determined by the individual-section area distribution analyses.
+2. Discretise this continuous distribution. Let the sum of the bins of this continuous distribution be $N$.
+3. Subsample at a range of realistic sample sizes.
+4. "Normalise" the subsamples to $N$ (i.e. such that the subsamples have the same number of items as $N$ but with the same shape). Do this by dividing the subsamples' area distribution by the relevant factor.
+5. Fit curves of the same form as mentioned in step 1 to distributions represented by these subsamples and recover the fit parameters.
+6. Repeat many times to get distribution of $\beta$ values at the range of sample sizes.
+7. Repeat this with a range of reasonable $\beta$ values for step 1.
+
+#+BEGIN_SRC python :session py
+# Number of repeats.
+n_repeats = 500
+
+# One of the parent distribution's "fit" parameter.
+alpha = 3 # Approximate
+
+# Name of the popt parameters for the fit function (hardcoded to be exp_func).
+popt_params = ["alpha","beta"]
+# Which popt parameter to be plotted (0: alpha; 1: beta).
+# If this is changed to 0, then the range of values to be tested (parent_betas) will need to change too.
+popt_idx = 1
+
+def repeat_fit(random_sample_size,choices,p,n_repeats,rng=None):
+    ''' Compute fit parameters (for the specific exponential function) of the distribution of random samples of a parent distribution. Repeat this computation the specified number of times to get a collection of fit parameters.
+
+    random_sample_size (int) : size of the random sample.
+    choices (list of numericals) : numbers to chose from.
+    p (list of numericals) : probability weighting corresponding to the choices. Note: this function is tailored for the analysis in that p should be a discretisation of the parent distribution, with the sum of p being the number of reflector grains represented by this parent distribution.
+    n_repeats (int) : number of repeats.
+    rng : type of rng to use. Defaults to numpy's default rng if not provided.
+
+    returns popts : list of fit parameters with length equal to the number of repeats.
+    '''
+    # Allocate a default RNG "method" if None provided.
+    if rng is None:
+        rng = np.random.default_rng()
+    # Compute number of items represented by p (weightings).
+    n_p = sum(p)
+    # Declare list in which fit parameter can be stored.
+    popts = []
+    # Repeat the specified number of times.
+    for i in range(n_repeats):
+        # Get a random sample of specified size from specified choices with specified weightings.
+        rand = rng.choice(choices,size=random_sample_size,p=norm(np.array(p)))
+        # Bin the random sample.
+        count,_ = np.histogram(rand,len(choices))
+        nonzero = count!=0
+        # Determine the normalisation factor required to match the size of the random sample to the size of the discretised parent distribution to ensure comparability in fit parameters.
+        norm_factor = random_sample_size/n_p
+        # Normalise binned random sample in the way described above.
+        count = count[nonzero]/norm_factor
+        # Determine fit parameters to exp_func after applying log10 to the normalised binned data counts.
+        popt,_ = curve_fit(exp_func,midpoints[nonzero],np.log10(count))
+        popts.append(list(popt))
+    # Convert the list of fit parameters into a numpy array.
+    popts = np.array(popts)
+    return popts
+
+# This is a computationally-expensive plot, so will only be reproduced if the figure isn't already present in the ./imgs folder or FORCE_OVERWRITE is True.
+bootstrap_variability_img = os.path.join(".","imgs",f"{file_prepend}-{popt_params[popt_idx]}-variability.png")
+if not os.path.exists(bootstrap_variability_img) or FORCE_OVERWRITE:
+    # Sample sizes to iterate through.
+    sample_sizes = 10**np.linspace(3,4.5,8)
+    # Parent beta values to iterate through.
+    parent_betas = [-100,-300,-1000]
+    # Iterate through the parent beta values.
+    for i,beta in enumerate(parent_betas):
+        # Define the continuous area distribution function.
+        continuous_distribution = lambda x : 10**exp_func(x,alpha,beta)
+        # Discretise the continuous area distribution at area values (midpoints) that have remained consistent throughout this notebook (i.e. range between 0 to 0.05 mm^2).
+        p = continuous_distribution(midpoints)
+        # Reduce the number of inputs into the function to find parameter fits by assigning values that don't change at least within each iteration to them.
+        standard_repeat_fit = lambda random_sample_size : repeat_fit(random_sample_size,midpoints,p,n_repeats,rng)
+        # Get a collection of fit parameters for the range of sample sizes specified above.
+        popts = np.array([standard_repeat_fit(int(n)) for n in sample_sizes])
+        # Extract the beta values from these fit parameters.
+        betas = popts[:,:,popt_idx]
+
+        # Verify that curve fitting works by fitting the discretised propability distribution.
+        real_fit_popt,_ = curve_fit(exp_func,midpoints,np.log10(p))
+        if real_fit_popt[popt_idx] == beta:
+            print("Verified")
+        else:
+            print("Verification failed")
+
+        # Label only one parent beta line.
+        if i==0:
+            label = "Actual/Input $\\%s$" % popt_params[popt_idx]
+        else:
+            label = None
+        # Plot the parent beta line for this iteration.
+        plt.axhline(real_fit_popt[popt_idx],label=label,color="lightblue",linestyle="--")
+        # Plot the distributions of observed betas at different sample sizes for this iteration (for a constant parent beta).
+        plt.boxplot(list(betas),positions=sample_sizes,widths=sample_sizes/5)
+
+    # Label axes.
+    plt.ylabel("$\\%s$" % popt_params[popt_idx])
+    plt.xlabel("Sample size")
+    # Show legend.
+    plt.legend()
+    # Set x axis scale to log.
+    plt.gca().set_xscale("log")
+
+    plt.savefig(bootstrap_variability_img)
+    plt.show()
+#+END_SRC
+
+#+RESULTS:
+
+#+CAPTION: Results
+[[./imgs/beta-variability.png]]
+
+This diagram not only shows that for random sample sizes on the order of 1000s, the observed \beta is not the same as the parent distribution's \beta, but also that the direction of difference is dependent on both the sample size and the parent \beta. The larger the sample size, or the less negative the value of parent \beta, the closer the observed \beta values are to the parent \beta (i.e. there's convergence of observed \beta values onto the parent \beta value).
+- Furthermore, the amount of uncertainty (proxied by the range) decreases with increasing sample size or more negative parent \beta.
+- These uncertainties are significant relative to the magnitude of the parent \beta (on the order of ~1/4 at sample sizes of 1000).
+
+The combined effect of all this complexity and non-linearity means that it's unsuitable to interpret differences in observed \beta values in the data. Hence, the suggestion that increasing alteration broadens the distributions is not robust.
+* Using Bootstrapping Methods to Estimate Uncertainty [12 Dec 2023]
+The above analysis reveals that it's possible to estimate the parent \beta from the observed \beta (derived from data) assuming the observed \beta is close to the median of \beta values derived from random samples. The distribution of \beta values derived from these random samples can be used as an /approximate/ proxy for the range of parent \beta values that can generate observed distributions.
+- Note: \alpha values are assumed to be correct in this analysis - in reality these have uncertainties too. However a focus on comparing \beta values between the samples means \beta values are focused on more.
+
+The process for finding a suitable parent \beta given sample parameters involves an iterative process that minimises the difference between the empirical median \beta (derived from subsampling some parent \beta) and observed \beta, such that the "best fit" parent \beta is one that could "best" generate the observed sample.
+- However, due to the random sampling involved, the "best fit" parent \beta is non-unique.
+- Therefore, this analysis is approximate and more so intended to give a sense of whether differences in observed \beta values are robust or not.
+
+Since this analysis computation expensive, it will not be repeated by default (change =FORCE_OVERWRITE= or delete the output =*-betas.json= to force repeat, which will also overwrite the saved figures).
+
+#+BEGIN_SRC python :session py
+def sample_empirical_betas(parent_beta,alpha,n,n_repeats=1000):
+    ''' Return a list of beta values produced from fits to subsamples of a discretised continuous distribution specific to this analysis. Variations in alpha values are ignored. Also verifies if the parent_beta can be recovered by fitting to the discretised distribution at integer resolution.
+
+    parent_beta (numerical) : beta value for the continuous distribution
+    alpha (numerical) : alpha value for the continuous distribution
+    n (int) : number of items in each sumsample
+    n_repeats (int) : number of repeats = number of elements in the list of returned beta values
+
+    returns betas (list of numericals) : list of "observed" beta values
+    '''
+    popt_idx = 1
+    # Define the continuous area distribution function.
+    continuous_distribution = lambda x : 10**exp_func(x,alpha,parent_beta)
+    # Discretise the continuous area distribution at area values (midpoints) that have remained consistent throughout this notebook (i.e. range between 0 to 0.05 mm^2).
+    p = continuous_distribution(midpoints)
+    # Reduce the number of inputs into the function to find parameter fits by assigning values that don't change at least within each iteration to them.
+    standard_repeat_fit = lambda random_sample_size : repeat_fit(random_sample_size,midpoints,p,n_repeats,rng)
+    # Get a collection of fit parameters for sample size specified.
+    popts = standard_repeat_fit(n)
+    # Extract the beta values from these fit parameters.
+    betas = popts[:,popt_idx]
+
+    # Verify that curve fitting works by fitting the discretised propability distribution.
+    real_fit_popt,_ = curve_fit(exp_func,midpoints,np.log10(p))
+    if int(real_fit_popt[popt_idx]) == int(parent_beta):
+        print("Verified")
+    else:
+        print("Verification failed")
+    return betas
+
+def parent_beta_search(observed_beta,alpha,n,similarity_tolerance=0.5,n_repeats=1000,max_iter=50):
+    ''' Find a parent beta that will produce a median similar to the observed beta. Note: due to the random sampling required to determine a median, the solution is non-unique. However, plotting the outputted parent_beta_arr against empirical_beta_arr can reveal the approximate relation between the parent beta and empirical median beta after subsampling it (as well as the non-unique nature of this relation).
+
+    observed_beta (numerical) : observed beta derived from the real data
+    alpha (numerical) : observed alpha derived from the real data
+    n (int) : number of items within the real data, which informs the number of items per subsample
+    similarity_tolerance (numerical) : if the absolute of the difference between empirical median beta and observed beta is below this, then treat them as the same and accept the parent beta used to generate that median
+    n_repeats (int) : number of subsampling experiment repeats before finding a median
+    max_iter (int) : maximum number of tries in finding a suitable parent beta that produces match between empirical median beta and observed beta. If this is exceeded, the arrays will still be returned (for closest-match finding), but betas will be None
+
+    returns parent_beta_arr (list of numericals) : list of parent beta values (values used for generating the discretised continuous distribution)
+    empirical_beta_arr (list of numericals) : list of empirical median beta values (determined from a set of beta values obtained from subsamples)
+    betas (list of numericals) : list of empirical beta values obtained from subsample in the final iteration (i.e. after a suitable parent beeta is found)
+    '''
+    print("Target: reducing absolute difference below %.3f" % similarity_tolerance)
+    parent_beta = observed_beta
+    # Produce first subsample of betas.
+    betas = sample_empirical_betas(parent_beta,alpha,n,n_repeats)
+    # Find median of subsample of betas.
+    median = np.median(betas)
+    # Find difference between empirical median from random sample and the beta value derived from actual data.
+    beta_diff = observed_beta - median
+    # Define list in which parent beta values are stored.
+    parent_beta_arr = [parent_beta]
+    # Define list in which resultant empirical median beta values are stored.
+    empirical_beta_arr = [median]
+    # Variable that stores the current iteration.
+    i = 0
+    # Iteratively "improve" the parent beta value as long as there's no match and the current iteration is below maximum.
+    while abs(beta_diff) > similarity_tolerance and i < max_iter:
+        print("Parent beta: %.3f, Empirical beta: %.3f;\nAbs. Difference: %.3f" % (parent_beta,median,beta_diff))
+        # Counteract the direction of difference between parent beta and empirical median beta (based on the signed nature of beta_diff).
+        parent_beta = parent_beta + beta_diff
+        # Produce first subsample of betas.
+        betas = sample_empirical_betas(parent_beta,alpha,n)
+        # Find median of subsample of betas.
+        median = np.median(betas)
+        # Find difference between empirical median from random sample and the beta value derived from actual data.
+        beta_diff = observed_beta - median
+        # Store this iteration's parent beta.
+        parent_beta_arr.append(parent_beta)
+        # Store this iteration's empirical median beta.
+        empirical_beta_arr.append(median)
+        # Increment the iteration counter.
+        i += 1
+    if beta_diff < similarity_tolerance:
+        print("Accepted parent beta: %.3f, Empirical beta: %.3f;\nAbs. Difference: %.3f" % (parent_beta,median,beta_diff))
+    else:
+        print("No suitable parent beta found in %u iterations with similarity tolerance %.3f;\nIncrease max_iter to fix." % (max_iter,similarity_tolerance))
+        betas = None
+    return parent_beta_arr,empirical_beta_arr,betas
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC python :session py
+import matplotlib as mpl
+
+# Check if a previous run has already produced betas data for the active processing pathway and only perform the analysis if not.
+if not os.path.exists(file_prepend+"-betas.json") or FORCE_OVERWRITE:
+    # Force reload from .csv file so that list processing is standardised.
+    df = pd.read_csv(file_prepend + "-summary.csv",index_col=0)
+
+    # Look at only sections that have an alteration index of 1 (heavy) or 0 (partly).
+    df = df[(df["alteration"]==1) | (df["alteration"]==0)]
+
+    # Load curve fit data.
+    curve_fits = np.array(json.loads("[" + ",".join(df["curve_fit"]) + "]"))
+
+    # Define data structure in which betas data can be stored.
+    betas_data = dict()
+    # Iterate through valid samples.
+    for i,sample in enumerate(df.index):
+        # Extract observed values derived from data.
+        alpha = curve_fits[i][0]
+        observed_beta = curve_fits[i][1]
+        n = df["n"].iloc[i]
+
+        # Determine beta values after "fit" attempt.
+        parent_beta_arr,empirical_beta_arr,betas = parent_beta_search(observed_beta,alpha,n,similarity_tolerance=0.5)
+
+        if betas is not None:
+            # Colormap for use in plotting iterations throughout the "fit" attempt.
+            cmap = "viridis"
+            # Describe plot layout.
+            fig,axs = plt.subplots(1,2,constrained_layout=True,figsize=(16,10))
+            # Plot the observed empirical beta
+            axs[0].axhline(observed_beta,label="Data $\\beta$",color="lightgreen",linestyle="-.")
+            # Scatter parent vs resultant empirical beta values.
+            scattered = axs[0].scatter(parent_beta_arr,empirical_beta_arr,c=range(len(parent_beta_arr)),cmap=cmap)
+            # Set axes labels.
+            axs[0].set_xlabel("Parent $\\beta$")
+            axs[0].set_ylabel("Resultant Empirical $\\beta$")
+            # Title subplot.
+            axs[0].set_title("Relation between parent and resultant $\\beta$")
+            # Display colorbar.
+            cb = fig.colorbar(scattered,ax=axs[0])
+            cb.ax.set_title("Iteration")
+
+            # Plot the distributions of observed betas at different sample sizes for this iteration (for a constant parent beta).
+            boxplot_dict = axs[1].boxplot(betas,positions=[n],patch_artist=True,boxprops={"facecolor":mpl.colormaps[cmap](255)})
+            # Plot the observed empirical beta
+            axs[1].axhline(observed_beta,label="Data $\\beta$",color="lightgreen",linestyle="-.")
+            # Plot the parent beta line for the final/matching case.
+            parent_beta = parent_beta_arr[-1]
+            axs[1].axhline(parent_beta,label="Parent $\\beta$",color="lightblue",linestyle="--")
+            # Set y label.
+            axs[1].set_ylabel("$\\beta$")
+            # Display legend.
+            axs[1].legend()
+            # Title subplot.
+            axs[1].set_title("Distribution of $\\beta$ for \"best fit\" values")
+            # Hide x axis.
+            axs[1].get_xaxis().set_visible(False)
+
+            # Title overall plot.
+            fig.suptitle(f"{sample}; $\\alpha$: {alpha}, $n$: {n}")
+            plt.savefig(os.path.join(".","imgs",f"{file_prepend}-beta-fitting-{sample}.png"))
+
+            # 1.5 IQR more below box
+            lowest_whisker = boxplot_dict["whiskers"][0].get_ydata()[1]
+            # 1.5 IQR more above box
+            highest_whisker = boxplot_dict["whiskers"][1].get_ydata()[1]
+            betas_data[sample] = {"1.5IQR_below":lowest_whisker,
+                                  "1.5IQR_above":highest_whisker,
+                                  "parent_beta":parent_beta,
+                                  "median_beta":np.median(betas),
+                                  "true_beta":observed_beta}
+    # Save betas data.
+    with open(file_prepend+"-betas.json","w") as outfile:
+        json.dump(betas_data,outfile)
+    plt.show()
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_EXPORT html
+<table>
+<tr>
+<th><img src="./imgs/modified-10-beta-fitting-06C.png"></th>
+<th><img src="./imgs/modified-10-beta-fitting-07A.png"></th>
+<th><img src="./imgs/modified-10-beta-fitting-M01.png"></th>
+</tr>
+<th><img src="./imgs/modified-10-beta-fitting-M04.png"></th>
+<th><img src="./imgs/modified-10-beta-fitting-M08.png"></th>
+<th></th>
+<tr>
+</tr>
+<tr>
+<th><img src="./imgs/modified-10-beta-fitting-M07B1.png"></th>
+<th><img src="./imgs/modified-10-beta-fitting-M07B2.png"></th>
+<th></th>
+</tr>
+</table>
+#+END_EXPORT
+
+Plotting these uncertainties with key:
+- Where the uncertainty here is defined as the range between 2 interquartile ranges from the median for the collection (with default size 1000) of \beta values generated by random subsampling.
+
+[[./imgs/betas-key.png]]
+
+#+BEGIN_SRC python :session py
+# Load betas data.
+with open(file_prepend+"-betas.json") as infile:
+    betas_data = json.load(infile)
+
+# Iterate through samples of potential interest.
+for sample,alteration in alteration_degree.items():
+    # Check if sample is of a degree of alteration that can be compared.
+    if alteration in [0,1]:
+        # Load betas data for the sample.
+        sample_betas_data = betas_data[sample]
+        # Plot "uncertainty" bars.
+        plt.plot([alteration]*2,
+                 [sample_betas_data["1.5IQR_"+k] for k in ["above","below"]],
+                 c="k",
+                 alpha=0.5,
+                 marker="_",
+                 zorder=0)
+        # Plot the parent beta and the median beta derived from random sampling using that parent beta.
+        plt.scatter([alteration]*2,
+                    [sample_betas_data[k] for k in ["parent_beta","median_beta"]],
+                    c=["red","blue"])
+        # Plot the observed beta derived from real data.
+        plt.scatter(alteration,
+                    sample_betas_data["true_beta"],
+                    marker="+",
+                    c="yellow")
+        # Labelling each sample.
+        plt.text(alteration+0.01,
+                 sample_betas_data["true_beta"],
+                 sample,
+                 va="center")
+        # Label the x axis with the degree of alteration represented by plotted samples.
+        plt.xlabel("Degree of alteration")
+        plt.gca().set_xticks([0,1],["medium","high"])
+        # Label y axis.
+        plt.ylabel("$\\beta$ (aka $b$)")
+        # Title plot.
+        plt.title("$\\beta$ (aka $b$) parameter values")
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+: None
+
+The large uncertainties confirms the previous suggestion that the uncertainties are significant - hence the differences in \beta between partly and heavily altered samples are not robust.
+* Conclusions
+This refined analysis demonstrates that many of the previous observations and inferences are not robust. The only observations suitable for further interpretation are:
+1. The semilog grain size area distributions have a negative exponential shape.
+2. The shape of the reflector area vs nearest neighbour plots are also mostly independent of the processing pathway, showing a broad range of nearest-neighbour distances for small grains, and a narrower range/convergence around 0.2 mm^2 as grain size increases.
+
+On the data processing side, the differences between results produced by the original method and this new method also highlights the importance of correctly identifying and merging grains that should appear as one, which is a time consuming process (either by doing so manually or developing an automated method).

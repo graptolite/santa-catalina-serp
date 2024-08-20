@@ -25,7 +25,7 @@ class AreaProcessor():
         else:
             prepend = "unmodified-"
         # Path to file containing filtered contours after being processed by the requested dilation-erosion pathway.
-        self.load_path = os.path.join(basedir,"filtered_data",prepend+filename)
+        self.load_path = os.path.join("filtered_data",prepend+filename)
 
     def _extract_contours(self):
         ''' Extract and save the contours of a thresholded scan. Both the "real size" (slightly smaller than actual reflector patches) and enlarged (extracted from image that's been scaled up by a factor of 2) contours are extracted and saved, which permits patch area computation.

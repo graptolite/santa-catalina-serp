@@ -1,0 +1,221 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; org-confirm-babel-evaluate: nil; -*-
+# NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
+# NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
+
+#+OPTIONS: toc:nil
+
+#+TITLE: Reflector Area Processing - Tests of Homogeneity
+
+This analysis will be for the 10x10 px dilation-erosion kernal, which was identified as the optimal size in =../section-scans-validation/further-analysis.org=. Contours are from =../section-scans-refined/contours-modified-10/=.
+
+#+BEGIN_SRC python :session py
+FORCE_OVERWRITE = False
+
+####################################
+# Don't change anything below here #
+####################################
+dilate_erode = 10
+
+if dilate_erode:
+    file_prepend = f"modified-{dilate_erode}"
+else:
+    file_prepend = "unmodified"
+
+import os
+import sys
+sys.path.insert(0,os.path.join("..","section-scans-full"))
+# General util funcs as detailed in ../section_scans-example/working.org (or its derivatives)
+from util_funcs import *
+
+def save_figure(path):
+    ''' Check if an image containing figure output already exists, otherwise save that figure.
+
+    path (string) : path to save the figure to.
+
+    returns None
+    '''
+    if not os.path.exists(path) or FORCE_OVERWRITE:
+        plt.savefig(path,bbox_inches="tight")
+    return
+
+import pandas as pd
+import json
+
+# Degree of alteration assigned to each section.
+alteration_degree = {"M04":0,
+                     "07A":0,
+                     "M08":0,
+                     "06C":1,
+                     "M07B1":1,
+                     "M07B2":1,
+                     "M01":1,
+                     "M02":2}
+
+# Text descriptions for each level of alteration.
+alteration_desc = {0:"Partly",
+                   1:"Heavily",
+                   2:"V. Heavily"}
+#+END_SRC
+
+#+RESULTS:
+
+* Section Scan Study Areas
+Homogeneity tests require knownledge of the full image dimensions (i.e. not convex hull dimensions), which are non-changing and so can be saved in nonvolatile storage.
+
+#+BEGIN_SRC python :session py
+# Folder containing thresholded samples (stored as .png).
+# Note: folder linking has been used - this is not the real path.
+samples_dir = os.path.join("..","..","DATASETS","RL_scans")
+# Load thresholded sample filenames from the folder.
+# Ignore the manually investigated images (for sample M07B1).
+samples = [f for f in os.listdir(samples_dir) if f.endswith(".png") and "-" not in f]
+if not os.path.exists("scan_dimensions.csv") or FORCE_OVERWRITE:
+    # Extract image dimensions to dictionary.
+    img_dimensions = {sample.replace(".png",""):(lambda dim :
+                                                 {"h":dim[0],"w":dim[1]})(cv2.imread(os.path.join(samples_dir,sample)).shape)
+                      for sample in samples}
+    # Same image dimensions to csv.
+    pd.DataFrame.from_dict(img_dimensions,orient="index").to_csv("scan_dimensions.csv")
+#+END_SRC
+
+#+RESULTS:
+
+* Homogeneity Testing
+Using the "Crystal density method" described on p. 41 (Kretz 1969).
+
+#+BEGIN_SRC python :session py
+from shapely.geometry import Polygon
+import shapely as shp
+from matplotlib import path
+import scipy.stats as sps
+
+# Critical p value below which homogeneity is rejected.
+p_crit = 0.05
+
+# Load scan dimensions.
+scans_df = pd.read_csv("scan_dimensions.csv",index_col=0)
+
+# Iterate through samples for consideration.
+for sample in samples:
+    # Load sample dimensions.
+    sample_dimensions = scans_df.loc[sample.replace(".png","")]
+    # Isolate height and width.
+    h,w = sample_dimensions.to_numpy()
+
+    # Load cv2-specification reflector patch definitions.
+    larger_contours = np.load(os.path.join("..","section-scans-refined-full",f"contours-{file_prepend}",f"{sample}-larger.npy"),allow_pickle=True)
+    # Compute centroids of each reflector patch, making sure they're downscaled appropriately.
+    centroids = np.array([np.array(Polygon(c[:,0,:]).centroid.xy).T[0] for c in larger_contours])/2
+    # Fix y-coordinate definition
+    centroids[:,1] = h - centroids[:,1]
+
+    # Define quadrant polygons.
+    bottom_left = Polygon([(0,0),(0,h/2),(w/2,h/2),(w/2,0)])
+    locations = dict(bottom_left = bottom_left,
+                     bottom_right = shp.transform(bottom_left,lambda v : v + [w/2,0]),
+                     top_left = shp.transform(bottom_left,lambda v : v + [0,h/2]),
+                     top_right = shp.transform(bottom_left,lambda v : v + [w/2,h/2]))
+
+    # Define list in which to store grain counts in each quadrant.
+    counts = []
+    # Iterate through the quadrants.
+    for loc,polygon in locations.items():
+        # Construct matplotlib polygon.
+        p = path.Path(list(zip(*polygon.exterior.xy)))
+        # Determine whether each centroid is within the polygon or not.
+        spatial_filter = p.contains_points(centroids)
+        # Count the number of centroids inside the polygon.
+        n_items = sum(spatial_filter)
+        # Save the count.
+        counts.append(n_items)
+    # Perform chi squared test.
+    res = sps.chisquare(counts)
+    # Isolate p value.
+    p = res.pvalue
+    # Determine outcome of test.
+    if p < p_crit:
+        outcome = "inhomogeneous"
+    else:
+        outcome = "homogeneous"
+    # Display outcome of test.
+    sample_name = sample.replace(".png","")
+    print(f"{sample_name} {outcome} at {1-p_crit} level of significance (observed p={p:.3g})")
+
+    # # For validation purposes:
+    # # Visualising the quadrants.
+    # [plt.plot(*p.exterior.xy,alpha=0.5) for p in locations.values()]
+    # # Visualising the centroid locations.
+    # plt.scatter(centroids[:,0],centroids[:,1],s=0.1)
+    # plt.gca().set_aspect("equal")
+    # plt.show()
+#+END_SRC
+
+#+RESULTS:
+
+All section scans except M04 are found to be inhomogeneous.
+- Therefore grain distributions can't be assumed random for sections except M04.
+
+In Kretz 1969, inhomogeniety was mitigated by cropping the scan, but this is not as easy to do with the serpentinite scans, and so the presence of inhomogeniety will remain a broad-scale observation rather than something that's to be mitigated.
+- This also suggests that the scans cover too small an area, hence future work may benefit from whole-section scans (as long as the equipment for that is available).
+
+Nearest-neighbour testing can be used to determine whether distributions are random as well, and should conclude that all scans except M04 have non-random reflector distributions.
+* Nearest-Neighbour Distance
+Assuming randomly distributed grains, the observed mean nearest-neighbour distance can be compared to the expected nearest-neighbour distance (Kretz 1969 p. 50):
+\begin{align}
+\Gamma_E &= \frac{1}{2\sqrt{N/A}}\\
+\Gamma_O &= \frac{\Sigma\Gamma}{N}
+\end{align}
+Where $\Gamma$ is nearest-neighbour distance (subscript $E$ - expected, $O$ - observed), $N$ number of grains in $A$, $A$ total area considered.
+\begin{equation}
+c = \frac{N(\Gamma_A-\Gamma_O)}{0.26136\sqrt{A}}
+\end{equation}
+Where $c$ is the standard variate of the normal curve, with $|c| > 1.96$ suggesting non-randomness at a 0.95 level of significance.
+
+Pixels will be used as the distance measurement here for simplicity.
+
+#+BEGIN_SRC python :session py
+from scipy.spatial import KDTree
+
+c_crit = 1.96
+
+for sample in samples:
+    # Load sample dimensions.
+    sample_dimensions = scans_df.loc[sample.replace(".png","")]
+    h,w = sample_dimensions.to_numpy()
+
+    # Load cv2-specification reflector patch definitions.
+    larger_contours = np.load(os.path.join("..","section-scans-refined-full",f"contours-{file_prepend}",f"{sample}-larger.npy"),allow_pickle=True)
+    # Compute centroids of each reflector patch, making sure they're downscaled appropriately.
+    centroids = np.array([np.array(Polygon(c[:,0,:]).centroid.xy).T[0] for c in larger_contours])/2
+    # Fix y-coordinate definition
+    centroids[:,1] = h - centroids[:,1]
+    # Construct KD tree using centroids for nearest-neighbour searching.
+    tree = KDTree(centroids)
+    # Compute nearest-neighbour distances for each reflector's centroid.
+    Gamma = [tree.query(c,2)[0][1] for c in centroids]
+    # Compute scan area.
+    A = h * w
+    # Get number of grains.
+    N = len(centroids)
+    # Compute expected "average" nearest-neighbour distance.
+    Gamma_E = 1/(2 * np.sqrt(N/A))
+    # Compute observed "average" nearest-neighbour distance.
+    Gamma_O = sum(Gamma)/N
+    # Compute standard variate of the normal curve.
+    c = (N * (Gamma_O - Gamma_E))/(0.26136 * np.sqrt(A))
+    # Determine outcome.
+    if abs(c) < c_crit:
+        outcome = "random"
+    else:
+        outcome = "not random"
+    # Display outcome.
+    sample_name = sample.replace(".png","")
+    print(f"{sample_name} {outcome} at 0.95 level of significance (observed c={c:.3g})\n\tGamma_E={Gamma_E}, Gamma_O={Gamma_O}")
+#+END_SRC
+
+#+RESULTS:
+
+Nearest-neighbour distances suggest none of these scans contain randomly distributed reflector grains (not even M04).
+
+Since observed mean nearest-neighbour distances are lower than observed, it can be concluded that grains tend to be more clustered than a random (spatial) distribution of grains. I.e. grains are often close together (but not touching).
+- This matches with visual inspections of the section scans, which suggest that reflectors are often found in dense patches.

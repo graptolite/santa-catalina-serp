@@ -1,0 +1,612 @@
+# -*- org-src-preserve-indentation: t; org-edit-src-content: 0; org-confirm-babel-evaluate: nil; -*-
+# NOTE: `org-src-preserve-indentation: t; org-edit-src-content: 0;` are options to ensure indentations are preserved for export to ipynb.
+# NOTE: `org-confirm-babel-evaluate: nil;` means no confirmation will be requested before executing code blocks
+
+#+OPTIONS: toc:nil
+
+#+TITLE: Microphotograph Stitching and Reflector Area Processing for one Example
+
+#+BEGIN_SRC python :session py
+FORCE_OVERWRITE = False
+def save_figure(path):
+    ''' Check if an image containing figure output already exists, otherwise save that figure.
+
+    path (string) : path to save the figure to.
+
+    returns None
+    '''
+    if not os.path.exists(path) or FORCE_OVERWRITE:
+        plt.savefig(path)
+    return
+#+END_SRC
+
+#+RESULTS:
+: # Out[17]:
+
+Note: this notebook saves and reads numpy save files *via pickle*.
+
+This analysis was inspired by initial hypotheses described in figure [[fig:hypothesis]].
+
+#+NAME: fig:hypothesis
+#+CAPTION: Initial hypotheses for what grain size distributions could mean.
+[[./imgs/hypotheses.png]]
+
+Though many functions represent generalised operations, most are described/named in such a way to fit the context of the specific analysis. For code brevity (at the cost of robustness), input verification in functions is also mostly skipped. Therefore, this notebook is designed to demonstrate the specific analysis performed.
+* Stitching a Section Scan
+Note: since the stitching method has little effect on the final results of this analysis, the code is not analysed in detail here. Also, similar to it's actual usage during the project, the code does not become fully automated, requiring manual changes to the sample name (folder) in the function =stitch_full= since the samples were photographed over multiple days. Stitched scans already exist in =./DATASETS/RL_scans/=, so this section is included mostly for completeness.
+
+Due to a lack of Reflected-Light section scanning microscope, manual photography followed by semi-automated image stitching (dependent on =Hugin= - https://hugin.sourceforge.io/ and the Hugin Scripting Interface =hsi=; tested/working on Debian 11, but with =hsi= install failed on Debian 12) was necessary to create Reflected-Light scans for further processing.
+
+This involved:
+1. Sequential photographing of the section along a path that would cover an area in a snake-path without changing zoom, where there would be overlap between subsequent photos (in a "column") as well as overlap between "columns" of photos (figure [[fig:section-scanning]]).
+   - These photographs must be taken at constant illumination and exposure, with no change in the white/black balance of the image. It may be necessary to disable auto white/black balance.
+   - Gamma may need to be changed to produce a significant contrast between reflective and non-reflective grains.
+   - Camera lens distortion should be negligible such as mosaic stitching is assumed later (i.e. sequential images are just transformed on a 2D plane relative to each other).
+   - The sequential nature of the photos must be reflected in their filenames. The files must be named in the format =image<4-digit id>.<file extension>=.
+2. If necessary, converting the images into .jpg format.
+3. Organising the photographs into multiple folders, each containing just one column of photos (with column folder name format =col<numerical id>=). An example folder structure:
+   - =<Sample Name>=
+     - =col1=
+     - =col2=
+     - =col3=
+     - /etc./
+4. Running the image stitcher below.
+   - Note: the final output file won't be named after the sample - it's large size means it isn't the most suitable for long term storage so isn't prioritised as such.
+
+#+NAME: fig:section-scanning
+#+CAPTION: Taking pictures for a larger area than one single frame of view using a snaking path (arrow shows direction of sequential photography). Note: 'column' refers to a collection of photos taken sequentially where all photos lie roughly on one axis. The size of the overlapping area doesn't need to be the same for all neighbouring images, and should be big enough that there are common features that can be seen visually.
+[[./imgs/section-scanning.png]]
+
+#+BEGIN_SRC python :session py
+# Change sample to the full folder path of the relevant sample
+sample = "stitch-eg"
+#+END_SRC
+
+#+BEGIN_SRC python :session py
+try:
+    # IMAGE STITCHER
+    from image_stitcher import stitch_full
+    do_convert_output = True
+    stitch_full(sample,do_convert_output)
+    print("Stitching completed")
+except:
+    print("Stitching failed")
+#+END_SRC
+* Extracting Reflectors
+Open one of the scan files (either original/non-converted or converted) in GIMP then use thresholding to isolate reflectors from the rest of the scan:
+
+1. Open the Threshold dialogue: Colours \to Threshold
+2. Adjust the critical threshold value until the reflectors are all selected for (white in black background) without too much noise (noise in the form of isolated pixels is fine as that can be filtered out later by considering areas above a certain number of pixels). Using the "Split view" functionality can help.
+3. Add an alpha channel to the image.
+4. Select by colour \to select all black pixels and delete.
+5. Export the image as a .png file with *alpha channel preserved*.
+
+This processing was applied to the example output and saved to =./stitch-eg/stitch-eg.png=.
+* Automated Reflector Processing
+** Spatial Description of Reflectors
+Reflector shapes are extracted as contours (using OpenCV methods) to permit further analysis. Some basic attempt at filling in gaps between grains is applied by default (can be disabled by setting =expand_erode= to =False=) to reduce the effect of small fractures or image-artefact gaps between reflectors. This is done through a dilate followed by erode (to prevent areas growing too much in size).
+
+#+BEGIN_SRC python :session py
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import binary_fill_holes
+import pandas as pd
+import os
+
+def reflector_processing(img_path,dilate_erode=False):
+    ''' Extract and save the contours of a thresholded scan. Both the "real size" (slightly smaller than actual reflector patches) and enlarged (extracted from image that's been scaled up by a factor of 2) contours are extracted and saved, which permits patch area computation.
+
+    img_path (string) : path to thresholded scan (image)
+    expand_erode (bool) : whether to dilate then erode the image in an attempt to join together reflectors separated by small distances (e.g. fractures)
+
+    returns None
+    '''
+    # Load image as BGRA image.
+    img = cv2.imread(img_path,cv2.IMREAD_UNCHANGED)
+    # Isolate alpha channel.
+    binary_img = alpha_channel = img[:,:,3]
+
+    if dilate_erode:
+        # Fill any holes within reflector patches.
+        # Must be uint8 for use by cv2.dilate
+        enclaves_filled = binary_fill_holes(binary_img).astype(np.uint8)
+        # Attempt to fill fractures to bring grains back to original, unfractured sizes by dilating ; subjective.
+        kernel = np.ones((20,20),np.uint8)
+        unfrag = cv2.dilate(enclaves_filled,kernel,iterations=1)
+        enclaves_filled = binary_fill_holes(unfrag).astype(np.uint8)
+        # Attempt to remove extra material added from previous step.
+        final_img = cv2.erode(enclaves_filled,kernel)
+    else:
+        final_img = binary_img.astype(np.uint8)
+
+    # Even when drawing *external* contours, the raster nature of the array is ignored:
+    #   -----
+    # 1 |x|x|
+    #   -----
+    # 0 |x|x|
+    #   -----
+    #    0 1
+    # Becomes [0,0],[1,1], such that the area is 1.
+    # This is fixed by determining the number of pixels the patch contour covers in a 2x scaled up image, then performing the operation (larger_contour_areas + 1 - 2 * contour_areas)/2 to find the number of pixels in the original patch.
+
+    larger_img = cv2.resize(final_img,tuple(np.array(final_img.shape)*2)[::-1])
+    # Extract non-zero areas; note cv2.CHAIN_APPROX_NONE prevents simplification of the vector definition of raster patches.
+    contours,_ = cv2.findContours(final_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
+    larger_contours,_ = cv2.findContours(larger_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
+
+    # Save the contour definitions for future processing.
+    np.save(f"{img_path}",np.array(contours,dtype=object))
+    np.save(f"{img_path}-larger.npy",np.array(larger_contours,dtype=object))
+    return
+#+END_SRC
+
+#+RESULTS:
+: # Out[8]:
+
+The thresholded images (all in .png format) should all be moved into one folder, whose path should be assigned to =rl_scan_folder= below. This folder should not contain any other .png files.
+
+#+BEGIN_SRC python :session py
+# Folder containing all of the thresholded scans.
+rl_scan_folder = "stitch-eg"
+# List all files in the folder.
+basefiles = os.listdir(rl_scan_folder)
+# Can overwrite this by specifying which files in the folder to process:
+# basefiles = ["manual-M07B1-threshold.png","manual-M07B1-threshold-redrawn.png"]
+
+# List only the .png files, which represent the thresholded scans.
+imgs = [f for f in basefiles if f.endswith(".png")]
+
+# Process all thresholded scans where necessary.
+for img in imgs:
+    if not os.path.exists(os.path.join(rl_scan_folder,f"{img}.npy")) or FORCE_OVERWRITE:
+        reflector_processing(os.path.join(rl_scan_folder,img))
+#+END_SRC
+
+#+RESULTS:
+: # Out[41]:
+** Reflector Parameters
+The reflector patch areas ($A_p$) are a function of the areas enclosed by the smaller ($A_l$) and larger contours ($A_l$), with all units in pixels:
+\begin{equation}
+A_p = \frac{A_l + 1 - 2 A_s}{2}
+\end{equation}
+
+#+BEGIN_SRC python :session py
+def find_areas(contours,larger_contours,pix2mm=None):
+    ''' Compute patch areas using "small" and "large" contours and then convert to mm^2 if necessary.
+
+    contours : list of "small" contours with vertices in pixel units
+    larger_contours : list of "large" contours with vertices in pixel units
+    pix2mm (numerical) : conversion factor between pixels to millimeters
+
+    returns patch_areas : list of patch areas
+    units : the units that the returned patch areas are in
+    '''
+    contour_areas = np.array(list(map(cv2.contourArea,contours)))
+    larger_contour_areas = np.array(list(map(cv2.contourArea,larger_contours)))
+    patch_areas = (larger_contour_areas + 1 - 2 * contour_areas)/2
+    if pix2mm:
+        patch_areas = np.array(patch_areas) * (pix2mm**2)
+        units = "mm"
+    else:
+        units = "px"
+    return patch_areas,units
+#+END_SRC
+
+#+RESULTS:
+: # Out[44]:
+
+The 10x zoom on the microscope combined with the image resolution means that 1000 pixels is ~1 mm. This scaling factor can be used to convert pixel areas into mm^2 areas. This is confirmed by figure [[fig:thin-section-scale]], where the 100 micron scale bar is ~100 px long. Due to the effectively-common slide thicknesses, all section were effectively photographed at the same zoom with the same pixel resolution, hence this scale factor is assumed universal for all the scans.
+
+#+NAME: fig:thin-section-scale
+#+CAPTION: Image taken at 10x zoom for the purpose of defining the scale.
+[[./imgs/generic-scale-m01.jpg]]
+
+#+BEGIN_SRC python :session py
+pix2mm = 0.001 # scale factor from pixels to mm i.e. how many mm per pixel
+#+END_SRC
+
+#+RESULTS:
+: # Out[6]:
+
+Contours were saved by the previous section into .npy files, which can be reloaded into the active workspace as required.
+
+#+BEGIN_SRC python :session py
+def load_contours(sample,basepath):
+    ''' Load the "small" and "large" contours from .npy files and filter to just contours with "small" contour area above a threshold.
+
+    sample (string) : name of the sample used in the .npy data filenames
+    basepath (string) : folder containing the .npy data files
+
+    returns contours : array of "small" contours
+    larger_contours : array of "large" contours
+    '''
+    contours = np.load(os.path.join(basepath,f"{sample}.png.npy"),allow_pickle=True)
+    larger_contours = np.load(os.path.join(basepath,f"{sample}.png-larger.npy"),allow_pickle=True)
+    return contours,larger_contours
+#+END_SRC
+
+#+RESULTS:
+: # Out[10]:
+
+In order to reduce the effect of fine, grainy noise (from the GIMP thresholding extraction), a filter removing reflectors (both apparent/noise and real) with /patch/ areas below a certain threshold can be applied when loading contours.
+- The minimum patch area was set to 5 px for all samples in the actual analysis, and will also be used in this example run.
+
+In order to avoid issues with heterogeneity in the spatial distribution of reflectors, especially in 3D (e.g. \citealp{Palin2016}, and under the assumption that coarser grained populations are most susceptible to uncertainty associated with this heterogeneity (the opposite being mentioned in section 5 final paragraph of \citealp{Palin2016}), a maximum area is also set for the patches that are considered for further analysis. This maximum value was set at 0.05 mm^2 in the actual analysis based on roughly where the distribution of grain areas stopped seeming well sampled as well as being a relatively "round" number.
+- Removal of grains larger than 0.05 mm^2 *is* reflected in the convex hull (study) area computed below (as grains that are filtered out aren't considered in further analysis).
+- The largest reflector area is still captured in case it is useful down the line.
+
+#+BEGIN_SRC python :session py
+def construct_minmax_filter(arr,min_val=None,max_val=None):
+    ''' Create min-max boolean filter using an array of values.
+
+    arr (list of numericals) : array of values
+    min_val (numerical) : minimum end of filter
+    max_val (numerical) : maximum end of filter
+
+    returns minmax_filter (list of bool) : boolean filter applicable to arr
+    '''
+    # If no min_val provided, set to the minimum in the array (i.e. no minimum filtering)
+    if min_val == None:
+        min_val = min(arr)
+    # If no max_val provided, set to the maximum in the array (i.e. no maximum filtering)
+    if max_val == None:
+        max_val = max(arr)
+    minmax_filter = np.logical_and(arr <= max_val,arr >= min_val)
+    return minmax_filter
+
+def list_of_list_filter(list_of_list,bool_filter):
+    ''' Filter a list of list-like objects by a top-level boolean filter.
+
+    list_of_list : list of list-like objects
+    bool_filter : top-level boolean filter
+
+    returns : list of list-like objects
+    '''
+    return [l[0] for l in zip(list_of_list,bool_filter) if l[1]]
+
+contours,larger_contours = load_contours(sample,rl_scan_folder)
+patch_areas,unit = find_areas(contours,larger_contours,pix2mm)
+
+# Find the largest grain area before filtering.
+largest_grain = max(patch_areas)
+
+# Size filtering.
+min_reflector_area = 5 * pix2mm**2 # mm2
+max_reflector_area = 0.05 # mm2
+
+size_filter = construct_minmax_filter(patch_areas,min_reflector_area,max_reflector_area)
+patch_areas = patch_areas[size_filter]
+# Filter for just the relevant contours.
+contours = list_of_list_filter(contours,size_filter)
+larger_contours = list_of_list_filter(larger_contours,size_filter)
+#+END_SRC
+
+#+RESULTS:
+: # Out[45]:
+
+Another important bit of information that can be extracted from these contours is the minimum area studied, which is the convex hull of the contours.
+
+#+BEGIN_SRC python :session py
+from scipy.spatial import ConvexHull
+from shapely.geometry import Polygon
+
+def area_convhull_polygons(contours):
+    ''' Determine the convex hull area in the same units as used to define the coordinates of the polygon.
+
+    contours : list of contour polygons defined by their vertices
+
+    returns area (numerical) : convex hull area of the list of contour polygons
+    '''
+    # Flatted the polygons such that the convex hull is for the collection of polygons vertices.
+    points = []
+    for c in contours:
+        points += c[:,0].tolist()
+    points = np.array(points)
+    # Determine the convex hull of the polygon vertices.
+    hull = ConvexHull(points)
+    # Extract the points defining the hull's vertices.
+    polygon = points[hull.vertices]
+    # Find the area of the convex hull as defined by its vertices.
+    area = Polygon(polygon).area
+    return area
+#+END_SRC
+
+#+RESULTS:
+: # Out[33]:
+
+Since the contours are defined in units of pixels, a pixel to mm^2 conversion must be applied.
+
+#+BEGIN_SRC python :session py
+area_studied = area_convhull_polygons(contours) * (pix2mm**2)
+#+END_SRC
+
+#+RESULTS:
+: # Out[34]:
+
+The =patch_areas= and =area_studied= are both now in the units of mm^2 and constitute the "area" data, which can be saved in one .json file. In the actual analysis, this .json file aggregated area data for all sections of interest.
+
+#+BEGIN_SRC python :session py
+import json
+
+# Demonstration of data structure used in the actual analysis (iterating through samples)
+areas_data = dict()
+areas_data[sample] = dict()
+areas_data[sample]["patch_areas"] = list(patch_areas)
+areas_data[sample]["area_studied"] = area_studied
+
+if not os.path.exists("areas.json") or FORCE_OVERWRITE:
+    with open("areas.json","w") as outfile:
+        json.dump(areas_data,outfile)
+#+END_SRC
+
+#+RESULTS:
+: # Out[35]:
+
+Some other statistics that may be useful to compare between different samples are the number of individual reflectors grains, total area covered by reflectors, the largest reflector area etc. These are captured by another dictionary and saved in a separate .csv file. The degree of alteration is also assigned to each sample in the actual analysis.
+- A curve fit (using an exponential function on log10 of bin counts) to the area distribution of the sample is also produced and added to this dataset.
+- Note: the curve fit for the example data is not great due to the small dataset.
+
+#+BEGIN_SRC python :session py
+from scipy.optimize import curve_fit
+
+def exp_fit(x,a,b):
+    # Exponential fit function for area distributions.
+    return a * np.exp(b*x)
+
+def bin_values(values,max_value,n_bins,min_value=0):
+    ''' Bin and count values based on a min-max range and number of bins.
+
+    values (list of numericals) : values to bin
+    max_value (numerical) : maximum bin edge
+    n_bins (int) : number of bins
+    min_value (numerical) : minimum bin edge
+
+    returns counts (list of numerical) : number of values within each bin
+    bins (list of numerical) : bin edges (will be one element longer than bin midpoints)
+    midpoints (list of numerical) : bin midpoints
+    '''
+    # Compute bin edges.
+    bins = np.linspace(min_value,max_value,n_bins+1)
+    # Compute bin midpoints.
+    midpoints = (bins[:-1] + bins[1:])/2
+    # Count values within each bin.
+    counts,_ = np.histogram(values,bins=bins)
+    return counts,bins,midpoints
+
+def fit_area_distro(counts,midpoints):
+    ''' Determine best fit to distribution of patch areas.
+
+    counts (list of ints) : counts corresponding to each area bin
+    midpoints (list of numericals) : midpoints of area bins
+
+    returns fit_params (list of numericals) : fit parameters
+    '''
+    # Select only datapoints where the bin count is non-zero.
+    nonzero_counts = counts!=0
+    counts = counts[nonzero_counts]
+    midpoints = midpoints[nonzero_counts]
+    # Curve fitting using the exponential distribution function.
+    popt,_ = curve_fit(exp_fit,midpoints,counts)
+    fit_params = popt.tolist()
+    return fit_params
+
+data = dict()
+
+counts,_,midpoints = bin_values(patch_areas,0.05,100)
+data[sample] = {"convhull":area_studied, # study area
+                "n":len(patch_areas), # number of discrete reflectors after filtering
+                "total_area":sum(patch_areas), # area of reflectors after filtering
+                "largest":largest_grain, # largest continuous reflector patch area
+                "curve_fit":fit_area_distro(counts,midpoints)}
+
+alteration_degree = {"stitch-eg":0}
+
+for sample,sample_data in data.items():
+    try:
+        sample_data["alteration"] = alteration_degree[sample]
+        data[sample] = sample_data
+    except KeyError:
+        pass
+
+df = pd.DataFrame.from_dict(data,orient="index")
+if not os.path.exists("summary.csv") or FORCE_OVERWRITE:
+    df.to_csv("summary.csv")
+#+END_SRC
+
+#+RESULTS:
+: # Out[39]:
+* Visualisation
+** Plotting Outputs
+*** Area Distribution
+The area distribution can be plotted as a histogram, on which the a fitted continuous distribution can be overlain. Due to a huge range in the counts for equally-spaced ranges, a semilog plot (log y axis) is used.
+
+#+BEGIN_SRC python :session py
+def plot_area_distribution_and_fit(areas,units,max_area=0.05,n_bins=100):
+    ''' Plot histogram of grain areas and overlay the best fit exponential distribution.
+
+    areas (list of numericals) : grain areas
+    units (string) : units of areas used in plot labelling
+    max_area (numerical) : maximum grain area considered in areas
+    n_bins (int) : number of bins used for fit finding and histogram plotting
+
+    returns fig, ax
+    '''
+    fig,ax = plt.subplots(constrained_layout=True)
+
+    # Compute bin edges.
+    bins = np.linspace(0,max_area,n_bins)
+    # Compute bin midpoints.
+    midpoints = (bins[:-1] + bins[1:])/2
+    # Plot areas histogram.
+    counts,_,_ = ax.hist(areas,bins=bins)
+    # Determine fit parameters.
+    popt = fit_area_distro(counts,midpoints)
+    # Plot fit.
+    ax.plot(midpoints,10**exp_fit(midpoints,*popt))
+    # Display fit.
+    ax.text(1,1,"$Count = 10**(%.2f \cdot \exp(%.2f \cdot Area))$" % tuple(popt),transform=ax.transAxes,ha="right",va="top")
+    # Set y axis to log scale.
+    ax.set_yscale("log")
+
+    # Limit axes.
+    ax.set_ylim([1,1.1*max(counts)])
+    ax.set_xlim([0,max_area])
+
+    # Label axes.
+    ax.set_xlabel(f"Area /{units}$^2$")
+    ax.set_ylabel("Count")
+    return fig,ax
+
+fig,ax = plot_area_distribution_and_fit(patch_areas,"mm")
+
+area_studied = areas_data[sample]["area_studied"]
+title = f"{sample}; n={sum(counts)}; area considered (convhull)={area_studied:.2f} mm$^2$;\ntotal reflector area = {sum(patch_areas):.2f} mm$^2$; excluding contours with area < {min_reflector_area/(pix2mm ** 2)} px$^2$"
+plt.title(title)
+save_figure(f"{sample}-areas.png")
+plt.show()
+#+END_SRC
+*** Aspect Ratio and Rotation
+The lengths of the long and short axes, as well as their ratio reveal information on the shape of reflector grains. Grain rotations may also reveal whether there's any preferred orientations present or not.
+
+#+BEGIN_SRC python :session py
+def get_dimensions(contours):
+    ''' Extract minimum bounding rectangle dimensions from contours.
+
+    contours : list of contours
+
+    returns all_dimensions : list of lists containing dimesions of minimum bounding rectangles
+    '''
+    all_dimensions = []
+    for contour in contours:
+        center,dimensions,rotation = cv2.minAreaRect(contour)
+        all_dimensions.append(dimensions)
+    return all_dimensions
+
+def aspect_ratio_hist(dimensions,bins=100):
+    ''' Plot histogram for aspect ratios from minimum bounding rectangle dimensions.
+
+    dimensions : list of lists containing dimesions of minimum bounding rectangles
+
+    returns fig, ax
+    '''
+    fig,ax = plt.subplots(constrained_layout=True)
+    # Extract short axes.
+    short_axes = list(map(min,dimensions))
+    # Extract long axes.
+    long_axes = list(map(max,dimensions))
+    # Compute grain aspect ratios.
+    aspect_ratios = np.array(long_axes)/np.array(short_axes)
+
+    # Plot histogram.
+    ax.hist(aspect_ratios,bins=bins,
+            histtype="step",edgecolor="k",label="Short")
+
+    # Axes labelling.
+    ax.set_xlabel("Aspect Ratio")
+    ax.set_ylabel("Count")
+    # Set y axis to log scale.
+    ax.set_yscale("log")
+    return fig,ax
+
+dimensions = get_dimensions(larger_contours)
+fig,ax = aspect_ratio_hist(dimensions)
+ax.set_xlim([1,100])
+plt.title(title)
+# save_figure(f"{sample}-aspect-ratios.png")
+plt.show()
+#+END_SRC
+
+The closer to smaller numbers (i.e. 1) the aspect ratio is, the more equant the grain. It's expected that most grains of magnetite should be relatively equant. An aspect ratio of 5 means that the long axis of the minimum bounding rectangle around the grain is 5 times longer than the short axis of the same rectangle.
+*** Reflector Area vs Distance to Nearest Neighbour
+A lack of relation between grain size and distance to nearest neighbour was used by \citet{Kretz1966} to infer that the size that a grain reaches is independent of its position in the rock relative to other grains of the same mineralogy, and that clusters of grains tend to have similar sizes to grains that are more isolated. To test whether this is the case for our samples, a plot of distance to nearest neighbour grain against grain area is created. Grain centroids are used to define nearest-neighbour distance.
+
+#+BEGIN_SRC python :session py
+from scipy.spatial import KDTree
+
+def find_nn_distances(larger_contours,pix2mm):
+    ''' Find the nearest neighbour distance to each (larger) contour's centroid in order.
+
+    larger_contours : array of the larger contours (i.e. whose areas are always non-zero) in pixel units
+    pix2mm (numerical) : conversion factor between pixels and millimeters
+
+    returns distances (list of numericals) : nearest-neighbour distances
+    '''
+    # Unwrap contour coordinates.
+    larger_contours = [c[:,0,:] for c in larger_contours]
+    # Find centroids of these contours and halve coordinates to ensure units are 1 pixel = 1 micron.
+    centroids = [np.array(Polygon(c).centroid.xy).T[0]/2 for c in larger_contours]
+    # KD Tree that can be searched across.
+    tree = KDTree(centroids)
+    # Nearest-neighbour distances to each centroid in order.
+    distances = [tree.query(c,2)[0][1]*pix2mm for c in centroids]
+    return distances
+
+def plot_area_vs_nearest_neighbour(areas,distances,max_area=0.05):
+    ''' Scatterplot reflector areas vs nearest-neighbour distances; create also histogram for nearest-neighbour distances aligned on the relevant axis.
+
+    areas (list of numericals) : reflector areas
+    distances (list of numericals) : list of nearest-neighbour distances corresponding to the reflectors described by areas
+
+    returns fig : Matplotlib Figure object
+    '''
+    fig = plt.figure(figsize=(6,6))
+    # Set up grid (1 row, 2 columns) that can be used to position axes.
+    # The left column plot (scatterplot) is 6 times wider than the right column plot (histogram).
+    gs = fig.add_gridspec(1,2,
+                          width_ratios=[6,1],
+                          hspace=0.1,
+                          wspace=0.1)
+
+    # Left column scatterplot.
+    units = "mm"
+    ax = fig.add_subplot(gs[0,0])
+    ax.scatter(areas,distances)
+    ax.set_xlabel(f"Area /{units}$^2$")
+    ax.set_ylabel(f"Distance to nearest neighbour /{units}")
+    ax.set_xlim([0,max_area])
+
+    # Right column histogram.
+    ax1 = fig.add_subplot(gs[0,1],sharey=ax)
+    ax1.tick_params(labelleft=False)
+    ax1.hist(distances,bins=50,orientation="horizontal")
+    ax1.set_xlabel("Count")
+
+    # Set figure title.
+    fig.suptitle(f"{sample}")
+    return fig
+
+nearest_neighbour_distances = find_nn_distances(larger_contours,pix2mm)
+plot_area_vs_nearest_neighbour(patch_areas,nearest_neighbour_distances)
+save_figure(f"{sample}-area-nearest-neighbour.png")
+plt.show()
+#+END_SRC
+** Extracting and Plotting Contour Area Slices
+Visualising which contours are within a certain grain size fraction can be useful. The method to look at a certain grain size fraction is captured by the code below, where a range of areas (min-max) in mm^2 is sliced into. Grains within the size range are coloured red.
+
+#+BEGIN_SRC python :session py
+# Min max area (in mm2) range
+area_slice = [0.001,0.002]
+
+# Create boolean filter for patch areas within the specified range.
+minmax_filter = construct_minmax_filter(patch_areas,*area_slice)
+
+# Extract contours that have patch areas within the specified range.
+ranged_contours = list_of_list_filter(contours,minmax_filter)
+
+# Path to reflector thresholded sample image.
+img_path = os.path.join(rl_scan_folder,sample+".png")
+
+img = cv2.imread(img_path)
+
+# Draw the patches that have patch areas within the min-max range.
+# NOTE: colors are BGR for CV2.
+[cv2.fillPoly(img,[np.reshape(c,(c.shape[0],2))],color=(0,0,255)) for c in ranged_contours]
+
+if not os.path.exists(f"{sample}-{str(area_slice)}.jpg") or FORCE_OVERWRITE:
+    cv2.imwrite(f"{sample}-{str(area_slice)}.jpg",img)
+
+# BGR to RGB.
+plt.imshow(img[:,:,::-1])
+plt.show()
+#+END_SRC
