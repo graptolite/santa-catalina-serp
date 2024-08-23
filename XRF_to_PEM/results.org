@@ -15,6 +15,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 
+# Declare fontsizes for plot elements.
+plt.rcParams.update({"axes.labelsize":12,
+                     "axes.titlesize":12,
+                     "xtick.labelsize":12,
+                     "ytick.labelsize":12,})
+
 # Declare the path stage names that are used to access theriak output data (by providing the filename id necessary to access the stored data for each stage).
 path_stages = ["cooling","serpentinisation","exhumation"]
 
