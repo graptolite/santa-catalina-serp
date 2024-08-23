@@ -70,6 +70,19 @@ Also compare compositional properties between early- and late-formed clinochlore
 `io`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `re`, `requests`
 
 
+# EPMA\_data\_analysis/magnetite\_as\_oxides.ipynb
+
+Convert element wt% to oxide wt% for the "magnetites" and investigate the result.
+
+
+## Dependencies
+
+
+### Python (pip) Modules
+
+`composition_processor`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `sklearn`, `sys`
+
+
 # XRF\_to\_PEM/XRF-PCA.ipynb
 
 Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
@@ -219,7 +232,7 @@ This collection of notebooks captures the iterative improvement of the reflector
 
 1.  Python (pip) Modules
 
-    `PIL`, `cv2`, `hsi` (optional as can be difficult to install/may not work on all systems), `json`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `scipy.ndimage`, `scipy.optimize`, `scipy.spatial`, `shapely.geometry`, `subprocess`, `textwrap`
+    `PIL`, `cv2`, `json`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `scipy.ndimage`, `scipy.optimize`, `scipy.spatial`, `shapely.geometry`, `subprocess`, `textwrap`
 
 2.  System Packages
 

@@ -29,3 +29,5 @@
 **/reflector_processing/*/imgs/.*
 !**/reflector_processing/*/local_data/*
 !**/reflector_processing/section-scans-runthrough-example/stitch-eg/*
+!**/EPMA_data_analysis/*.ipynb
+!**/EPMA_data_analysis/*.org

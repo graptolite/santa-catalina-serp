@@ -49,6 +49,17 @@
 `io`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `re`, `requests`
 
 
+# EPMA\_data\_analysis/magnetite\_as\_oxides.ipynb
+
+
+## `EPMA_data_analysis/magnetite_as_oxides.ipynb`
+
+
+### Python (pip) Modules
+
+`composition_processor`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `sklearn`, `sys`
+
+
 # XRF\_to\_PEM/XRF-PCA.ipynb
 
 
@@ -413,11 +424,11 @@
 
 1.  Python (pip) Modules
 
-    `PIL`, `hsi`, `numpy`, `os`, `subprocess`, `textwrap`
+    `PIL`, `numpy`, `os`, `re`, `subprocess`, `textwrap`
 
 2.  System Packages
 
-    `convert`, `cpclean`, `cpfind`, `enblend`, `pto_gen`
+    `ImageMagick`, `Hugin`
 
 
 # vein\_transects/server.py
