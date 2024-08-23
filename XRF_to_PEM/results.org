@@ -86,8 +86,7 @@ def local_area_stack(x,y,color,ax,baseline_y=0,**plotstyle_kwargs):
     # Plot a line at this effective upper y.
     ax.plot(x,y,c="k",**plotstyle_kwargs)
     # Fill the stack area.
-    ax.fill_between(x,baseline_y,y,color=color,zorder=-
-100)
+    ax.fill_between(x,baseline_y,y,color=color,zorder=-100)
     return
 
 def magnetite_silicate_plots(serp_df):
@@ -106,7 +105,7 @@ def magnetite_silicate_plots(serp_df):
     # Declare temperature as the x variable.
     x_var = serp_df[":Temperature"]
     # Initialize figure and axes grid.
-    fig,axs = plt.subplots(3,1,sharex=True,height_ratios=[4,1,1],constrained_layout=True)
+    fig,axs = plt.subplots(3,1,sharex=True,height_ratios=[2.5,1,1],figsize=(6.4,3.8),constrained_layout=True)
     # Check if haematite needs to be considered in the Fe oxide plot.
     if "Hem" in serp_vol_df:
         # If so, stack the haematite above magnetite.
@@ -132,7 +131,7 @@ def magnetite_silicate_plots(serp_df):
 
     # Produce volume plots for the silicates serpentine and clinochlore in the lower axes.
     for i,mineral in enumerate(["Srp","Clc"]):
-        local_area_stack(x_var,serp_vol_df[mineral],mineral,axs[i+1])
+        local_area_stack(x_var,serp_vol_df[mineral],mineral_colors[mineral],axs[i+1])
         axs[i+1].set_ylim([0,max(serp_vol_df[mineral])*1.07])
 
     # Label the x axes for only the lowermost axes.
@@ -145,7 +144,9 @@ for sample in samples:
     serp_df = read_theriak_table(os.path.join("local_data","PEM",f"serpentinisation-{sample}-loop_table"))
     # Produce magnetite-silicate volume comparison plots.
     magnetite_silicate_plots(serp_df)
+    # plt.savefig(f"figure-{sample}-mag-stack.svg")
 plt.show()
 #+END_SRC
 
 #+RESULTS:
+: None
