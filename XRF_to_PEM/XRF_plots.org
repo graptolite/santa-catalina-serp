@@ -138,7 +138,7 @@ from io import BytesIO
 plot_order = [("FeTot","Al2O3"),("SiO2","Al2O3"),("SiO2","MgO"),
               ("TiO2","MgO"),("Al2O3","MgO"),("MnO","MgO")]
 # Axes ranges (y var range,x var range) to match those of Benard et al 2021.
-plot_limits = [([6,9],[0,4.5]),([40,46],[0,4.5]),([40,46],[36,50]),
+plot_limits = [([6,12],[0,4.5]),([40,46],[0,4.5]),([40,46],[36,50]),
                ([0,0.2],[36,50]),([0,4.5],[36,50]),([0.05,0.2],[36,50])]
 
 # Class specific to plotting comparisons to Benard et al 2021.
@@ -185,15 +185,17 @@ class PlotOxides():
         use_df = self.use_df
         # Extract list of samples from the composition dataframe.
         samples = use_df.index
-        # Get the number of samples.
+        # Specify colormap.
         cmap = mpl.colormaps["tab10"]
+        # Specify marker symbol map.
+        markers = ["o","^","X","*","d"] * int(np.ceil(len(use_df)/5))
         # pt to inches conversion.
         pt = 1/72
         # Initialize figure with prescribed figure size (where figsize is in inches, converted from pt).
         fig,ax = plt.subplots(figsize=(figsize_pt[0]*pt,figsize_pt[1]*pt),tight_layout={"pad":0})
         # Plot each sample's relevant composition as a point onto the figure.
         for i,(sample,row) in enumerate(use_df.iterrows()):
-            ax.scatter(row[x_oxide],row[y_oxide],color=cmap(i),s=15,edgecolors="k",label=sample)
+            ax.scatter(row[x_oxide],row[y_oxide],color=cmap(i),s=25,edgecolors="k",label=sample,marker=markers[i])
         # Set x and y axis limits.
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
@@ -223,15 +225,6 @@ for i,(rect,plot_vars,plot_limit) in enumerate(zip(ordered_rects,plot_order,plot
     fig_svg = BytesIO()
     # Identify the dimensions of the axes.
     pt_dimension = np.array([rect["width"],rect["height"]])
-    # Check if the plot is the first plot, where y var is FeTot.
-    if i == 0:
-        # Increase the upper y axis limit for the first FeTot plot beyond the limit specified by Benard et al 2021.
-        # Do this by doubling the vertical range (without changing the lower y axis limit).
-        vertical_upscale = 2
-        # Increase y axis height.
-        pt_dimension[1] = pt_dimension[1] * vertical_upscale
-        # Moving up the upper y limit.
-        plot_limit[0][1] += (vertical_upscale-1) * (plot_limit[0][1]-plot_limit[0][0])
     # Produce and save (to BytesIO) a scatter plot of the active oxide pair.
     plot_oxides.scatter(plot_vars[1],plot_vars[0],plot_limit[1],plot_limit[0],pt_dimension,fig_svg)
     # Compute and store the bottom left corner position of the active plot.
