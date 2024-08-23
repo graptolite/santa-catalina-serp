@@ -122,7 +122,8 @@ def parse_rect(rect):
 
     Returns: :dict: {"<feature>":<value>}
     '''
-    return {x:float(x) for x in get_attributes(["width","height","x","y"],rect)}
+    attribs = ["width","height","x","y"]
+    return {attrib:float(x) for attrib,x in zip(attribs,get_attributes(attribs,rect))}
 
 def gridify(geoms,n_cols):
     ''' Find the index order for a list of geometries that orders them in a grid by rows then columns.

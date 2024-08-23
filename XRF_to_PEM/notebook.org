@@ -664,6 +664,9 @@ Fe2O3_tolerance = 0.0005
 max_iter = 20
 # Initialize iteration counter.
 i = 0
+# Compute the differences between the oxides being actively corrected and their target values.
+SiO2_diff = abs(compositions["SiO2"] - SiO2_target)
+Fe2O3_diff = abs(compositions["Fe2O3"] - Fe2O3_target)
 # Iterate as long as none of the finality conditions are not met.
 while not (all(SiO2_diff<SiO2_tolerance) and all(Fe2O3_diff<Fe2O3_tolerance)) and i < max_iter:
     # Find acceptable f_Fe3 values that ensure Fe2O3 wt% ~0.1 for the samples in the unmodified compositions df.
