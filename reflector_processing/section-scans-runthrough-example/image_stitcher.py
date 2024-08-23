@@ -1,7 +1,7 @@
 # Written by Yingbo Li on the 9th Nov 2023
 # For autostitching overlapping scans that are grouped into columns and named in order.
 
-from hsi import *
+import re
 import os
 import numpy as np
 import subprocess
@@ -25,30 +25,56 @@ def compute_control_points(scan1,scan2):
     subprocess.call(["cpclean","control_points.pto","-o",control_points_file],stdout=subprocess.DEVNULL)
     return control_points_file
 
-def load_project(hugin_project):
-    ''' Load Hugin project file into Python object.
+class HuginProject():
+    def __init__(self,project_file):
+        ''' project_file | :str: | Path to Hugin project file.
+        '''
+        self.project_file = project_file
+        with open(project_file) as infile:
+            self.raw_project = infile.read()
+        return
 
-    hugin_project | :str: | name of Hugin project file
+    def extract_multiline_data(self,pre_comment):
+        ''' Extract a block of named data (by a header comment) and return the lines of data within that block.
 
-    Returns: :hsi.Panorama:
-    '''
-    # Load Hugin project and read control points into a numpy array.
-    p = Panorama()
-    infile = ifstream(hugin_project)
-    p.readData(infile)
-    del infile
-    return p
+        pre_comment | :str: | Comment immediately after "#" at the header of the data block.
 
-def extract_control_points(p):
-    ''' Extract control points from Hugin project file into numpy array.
+        Returns: :list: [:str: <data lines>]
+        '''
+        # Find a match for the data block as designated by a comment before it.
+        data_match = re.search("#%s([\s\S]+?)\n\n" % pre_comment,self.raw_project)
+        # Check if a match was successfully found or not (in which case raise an error).
+        if not data_match:
+            raise ValueError("%s not found in %s" % (pre_comment,control_points_file))
+        # Convert bulk string into lines of data.
+        all_lines = data_match.group(1).strip().split("\n")
+        # Remove comment lines.
+        data_lines = [l for l in all_lines if not l.startswith("#")]
+        return data_lines
 
-    p | :hsi.Panorama: | Hugin project object.
+    def extract_control_points(self):
+        ''' Extract control points from Hugin project file into numpy array.
 
-    Returns: :numpy.array: | Array of control point coordinates.
-    '''
-    control_points = p.getCtrlPoints()
-    control_points_arr = np.array([(p.x1,p.x2,p.y1,p.y2) for p in control_points])
-    return control_points_arr
+        Returns: :numpy.array: | Array of control point coordinates in format x1,y1,x2,y2.
+        '''
+        # Extract control point data block.
+        control_points_data = self.extract_multiline_data(" control points")
+        # Isolate the parts relevant to the control point coordinates.
+        control_points = [l.split(" ")[3:-1] for l in control_points_data]
+        # Isolate numerical coordinates and convert to numpy array.
+        control_points_arr = np.array([[coord[1:] for coord in point] for point in control_points]).astype(float)
+        return control_points_arr
+
+    def extract_image_names(self):
+        ''' Extract image names in order.
+
+        Returns: :list: [:str:]
+        '''
+        # Extract image data block.
+        image_data = self.extract_multiline_data(" image lines")
+        # Isolate image names.
+        image_names = [l.split(" ")[-1][1:].replace('"',"") for l in image_data]
+        return image_names
 
 def extract_offset(control_points_arr):
     ''' Extract transform offset defined by a collection of control points that may or may not contain anomalous values.
@@ -60,9 +86,9 @@ def extract_offset(control_points_arr):
     # Verify the existence of control points and if not, state that manual control point selection will be necessary.
     try:
         # Find difference in x points.
-        dxs = control_points_arr[:,0] - control_points_arr[:,1]
+        dxs = control_points_arr[:,0] - control_points_arr[:,2]
         # Find difference in y points.
-        dys = control_points_arr[:,2] - control_points_arr[:,3]
+        dys = control_points_arr[:,1] - control_points_arr[:,3]
 
         # Determine transformation (by coordinate difference) necessary to align the two images.
         # Find the median difference in x coordinates.
@@ -162,15 +188,14 @@ def merge_images(scan1,scan2,out="out",generate_pto=True):
         # Turn off in case there's insufficient overlap to autodetect correlation points, in which case the script will break and manual review in `clean_control_points.pto` will be necessary before rerunning this with ***generate_pto=False***
         control_points_file = compute_control_points(scan1,scan2)
 
-    # Load Hugin project data
-    p = load_project(control_points_file)
-
+    project = HuginProject(control_points_file)
     # Determine image offset necessary to align the second image with the first.
-    dx,dy = extract_offset(extract_control_points(p))
+    dx,dy = extract_offset(project.extract_control_points())
 
-    # Load filenames of each photo within the Hugin project.
-    f1 = p.getImage(0).getFilename()
-    f2 = p.getImage(1).getFilename()
+    # Load ordered filenames of each photo within the Hugin project.
+    imgs = project.extract_image_names()
+    f1 = imgs[0]
+    f2 = imgs[1]
 
     # Align then save images.
     out1,out2 = align_images(f1,f2,dx,dy)
@@ -235,7 +260,7 @@ def stitch_full(sample,do_convert_output=False):
     '''
     original_dir = os.getcwd()
     # Enter the sample's directory.
-    os.chdir(f"{sample}")
+    os.chdir(sample)
     # List and string sort all column folders.
     colfolders = sorted([f for f in os.listdir() if f.startswith("col")])
 

@@ -35,13 +35,13 @@ Though many functions represent generalised operations, most are described/named
 * Stitching a Section Scan
 Note: since the stitching method has little effect on the final results of this analysis, the code is not analysed in detail here. Also, similar to it's actual usage during the project, the code does not become fully automated, requiring manual changes to the sample name (folder) in the function =stitch_full= since the samples were photographed over multiple days. Stitched scans already exist in =./DATASETS/RL_scans/=, so this section is included mostly for completeness.
 
-Due to a lack of Reflected-Light section scanning microscope, manual photography followed by semi-automated image stitching (dependent on =Hugin= - https://hugin.sourceforge.io/ and the Hugin Scripting Interface =hsi=; tested/working on Debian 11, but with =hsi= install failed on Debian 12) was necessary to create Reflected-Light scans for further processing.
+Due to a lack of Reflected-Light section scanning microscope, manual photography followed by semi-automated image stitching (dependent on =Hugin= - https://hugin.sourceforge.io/) was necessary to create Reflected-Light scans for further processing.
 
 This involved:
 1. Sequential photographing of the section along a path that would cover an area in a snake-path without changing zoom, where there would be overlap between subsequent photos (in a "column") as well as overlap between "columns" of photos (figure [[fig:section-scanning]]).
    - These photographs must be taken at constant illumination and exposure, with no change in the white/black balance of the image. It may be necessary to disable auto white/black balance.
    - Gamma may need to be changed to produce a significant contrast between reflective and non-reflective grains.
-   - Camera lens distortion should be negligible such as mosaic stitching is assumed later (i.e. sequential images are just transformed on a 2D plane relative to each other).
+   - Camera lens distortion should be negligible such that mosaic stitching is assumed later (i.e. sequential images are just transformed on a 2D plane relative to each other).
    - The sequential nature of the photos must be reflected in their filenames. The files must be named in the format =image<4-digit id>.<file extension>=.
 2. If necessary, converting the images into .jpg format.
 3. Organising the photographs into multiple folders, each containing just one column of photos (with column folder name format =col<numerical id>=). An example folder structure:
