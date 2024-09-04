@@ -31,3 +31,4 @@
 !**/reflector_processing/section-scans-runthrough-example/stitch-eg/*
 !**/EPMA_data_analysis/*.ipynb
 !**/EPMA_data_analysis/*.org
+!**/EPMA_data_analysis/imgs/*

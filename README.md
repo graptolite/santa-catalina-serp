@@ -80,7 +80,25 @@ Convert element wt% to oxide wt% for the "magnetites" and investigate the result
 
 ### Python (pip) Modules
 
-`composition_processor`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `sklearn`, `sys`
+`../XRF_to_PEM/composition_processor.py`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `sys`
+
+
+# EPMA\_data\_analysis/test\_compositional\_difference.ipynb
+
+Use PERMANOVA/PERMDISP to test for a difference between the multivariate compositions of magnetite from partially vs heavily serpentinized samples.
+
+
+## Dependencies
+
+
+### R Packages
+
+`robCompositions`, `vegan`
+
+
+### System Packages
+
+`R`
 
 
 # XRF\_to\_PEM/XRF-PCA.ipynb

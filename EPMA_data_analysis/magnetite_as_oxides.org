@@ -8,7 +8,7 @@ The magnetite data is expressed in elemental wt% rather than oxide wt% since oxy
 2. Determine how much oxygen remains after the moles oxide components of all elements except Fe are computed.
 3. Partition this remaining O into FeO and Fe2O3.
 4. Convert moles of oxide to mass of oxide
-5. Normalize result to sum to 100%.
+5. Normalize result to sum to 100% (i.e. closure to 100%).
 
 #+BEGIN_SRC python :session py
 import sys
@@ -16,6 +16,7 @@ import os
 sys.path.insert(0,os.path.join("..","XRF_to_PEM"))
 from composition_processor import Ar,Molecule
 import pandas as pd
+import numpy as np
 
 # Load elements df.
 df = pd.read_csv("magnetites.csv")
@@ -26,6 +27,10 @@ df = df[df["Mineral"].apply(lambda x : x in minerals_of_interest)]
 analysed_elements = ["Si","Ti","Mn","Cr","Ni","O","Mg","Fe"]
 # Convert mass to moles of each element.
 mol_df = df[analysed_elements].apply(lambda col : col/Ar[col.name])
+# Clip negatives.
+mol_df = np.clip(mol_df,0,100)
+# Set index to spot names.
+mol_df.index = df["Comment"]
 # Declare number of own atoms and oxygen atoms required to form each element's standard oxide.
 std_oxides = {"Si":(1,2),
               "Ti":(1,2),
@@ -57,183 +62,36 @@ mass_df = mass_df.div(mass_df.sum(axis=1),axis=0) * 100
 #+END_SRC
 
 #+RESULTS:
-* Proportional Oxide Relations
-It's useful to investigate relations between the abundance of different oxide components - this can be done by plotting biplots and looking for relations/trends.
+* Composition of Magnetite in Partially vs Heavily Serpentinized Samples
+Do the magnetites in partially vs heavily serpentinized rocks have significantly different compositions?
 
-#+BEGIN_SRC python :session py
-import matplotlib.pyplot as plt
-def plot_relation(colx,coly,df=mass_df):
-    ''' Plot two columns of a df against each other using matplotlib and label the axes with the column names.
-
-    colx | :str: | Name of the column whose data is to be plotted onto the x axis.
-    coly | :str: | Name of the column whose data is to be plotted onto the y axis.
-    df | :pandas.DataFrame: | Dataframe containing these columns of data.
-
-    Returns: :matplotlib.axes.Axes:
-    '''
-    # Initialize plot.
-    fig,ax = plt.subplots()
-    # Scatter points.
-    ax.scatter(df[colx],df[coly])
-    # Label axes.
-    ax.set_xlabel(colx)
-    ax.set_ylabel(coly)
-    return
-
-plot_relation("Cr2O3","Fe2O3")
-plot_relation("Cr2O3","MnO")
-
-plt.show()
-#+END_SRC
-
-#+RESULTS:
-: None
-
-Some of these appear to have a linear relation e.g. Cr2O3 vs MnO, but the presence of outliers means this is difficult to verify. One way to tackle this would be to remove the outliers on the y axis before plotting.
-
+Can first check differences in Cr contents (the main "contaminant"), and then apply a chi2 test.
+** Cr Comparison
 #+BEGIN_SRC python :session py
 import numpy as np
+import matplotlib.pyplot as plt
 
-def identify_outliers(data,sigma_max=2,clip=None):
-    ''' Find outliers in a pandas Series data array returning a list of bools representing a filter for non-outliers.
+# Dictionary to map sample name to recorded host mineral.
+sample_map = dict(zip(df["Comment"],df["Mineral"]))
 
-    data | :pandas.Series: | Data to search for outliers in.
-    sigma_max | Numerical | Maximum number of standard deviations away from the mean before being marked an outlier.
-    clip | :list: [ymin,ymax] | Clip range for the y values (in addition to the outlier removal).
+classification = {"Partially":["M04","M08"],
+                  "Heavily":["06C","M01"]}
+dfs = dict()
+cr2o3s = []
+for name,samples in classification.items():
+    filtered_serp_df = mass_df.copy()[[any([x in idx for x in samples]) for idx in mass_df.index]]
+    filtered_serp_df["group"] = name
+    filtered_serp_df["host"] = [sample_map[sample] for sample in filtered_serp_df.index]
+    cr2o3 = filtered_serp_df["Cr2O3"]
+    print(name + " serp Cr2O3 wt%% (n=%u)\n" % len(filtered_serp_df),"Mean: %.2f" % np.mean(cr2o3),"Stdev: %.2f" % np.std(cr2o3))
+    cr2o3s.append(cr2o3)
+    dfs[name] = filtered_serp_df
 
-    Returns: :list: [:bool:]
-    '''
-    # Compute mean and stdev of data.
-    mean,stdev = np.mean(data),np.std(data)
-    # Filter for non outliers.
-    outlier_filter = abs(mean - data) < (stdev * sigma_max)
-    if clip is not None:
-        # Filter for datapoints not outside of the clip region.
-        clipped_filter = data == np.clip(data,*clip)
-        # Combine filter with the outlier filter
-        outlier_filter = outlier_filter & clipped_filter
-    return outlier_filter
-
-def plot_robust_relation(colx,coly,sigma_max=2,df=mass_df,point_colors=None):
-    ''' Plot two columns of a df against each other after removing outliers on the y axis and label the axes with the column names.
-
-    colx | :str: | Name of the column whose data is to be plotted onto the x axis.
-    coly | :str: | Name of the column whose data is to be plotted onto the y axis.
-    sigma_max | Numerical | Maximum number of standard deviations (away from the coly mean) before marking a datapoint as being an y axis outlier.
-    df | :pandas.DataFrame: | Dataframe containing these columns of data.
-    point_colors | :list: | List of colors to plot the points with.
-
-    Returns: :matplotlib.axes.Axes:
-    '''
-    # Initialize figure.
-    fig,ax = plt.subplots()
-    # Isolate the x and y data.
-    x_data,y_data = df[colx],df[coly]
-    # Generate generic color list if no color list is provided.
-    if point_colors is None:
-        point_colors = ["k"] * len(x_data)
-    # Identify the y axis outliers.
-    outliers_filter = identify_outliers(y_data,sigma_max,[0,100])
-    # Filter data.
-    x_data,y_data = x_data[outliers_filter],y_data[outliers_filter]
-    # Filter corresponding color list.
-    point_colors = [c for i,c in enumerate(point_colors) if list(outliers_filter)[i]]
-    # Plot points after filtering out the y axis outliers.
-    ax.scatter(x_data,y_data,color=point_colors)
-    # Label axes
-    ax.set_xlabel(colx)
-    ax.set_ylabel(coly)
-    return ax
-
-plot_robust_relation("Cr2O3","Fe2O3")
-plot_robust_relation("Cr2O3","MnO")
-plot_robust_relation("Cr2O3","MgO")
-plot_robust_relation("Cr2O3","TiO2")
+plt.boxplot(cr2o3s)
+plt.gca().set_xticks([1,2],["P","H"])
+plt.ylabel("Cr wt%")
 plt.show()
 #+END_SRC
 
 #+RESULTS:
 : None
-
-Some relations are confirmed e.g. Cr2O3 vs MnO. However, this cross plotting also reveals some clustering behaviour, which would be useful to identify and perhaps relate to the type of mineral. This can be first investigated by plotting the different magnetite mineral host points in different colors and check for any correspondence between the clusters and different host minerals.
-
-#+BEGIN_SRC python :session py
-import matplotlib as mpl
-
-cmap = {mineral:mpl.colormaps["tab10"](i) for i,mineral in enumerate(minerals_of_interest)}
-colors = [cmap[mineral] for mineral in df["Mineral"]]
-
-ax = plot_robust_relation("Cr2O3","TiO2",point_colors=colors)
-[plt.text(0.01,0.99-0.05*i,mineral,color=cmap[mineral],ha="left",va="top",transform=ax.transAxes) for i,mineral in enumerate(cmap)]
-plt.show()
-#+END_SRC
-
-#+RESULTS:
-: None
-
-This reveals that the early-clc hosted magnetite is in a distinct cluster away from the more scattered late-clc (just noted as "clc") hosted magnetite. However, both populations appear to lie within other serpentine related clusters.
-
-A more algorithmic clustering approach based on the data rather than prescribed information can also be performed.
-
-#+BEGIN_SRC python :session py
-from sklearn import cluster
-
-def robust_cluster(colx,coly,sigma_max=2,df=mass_df):
-    ''' Plot two columns of a df against each other after removing outliers on the y axis and label the axes with the column names.
-
-    colx | :str: | Name of the column whose data is to be plotted onto the x axis.
-    coly | :str: | Name of the column whose data is to be plotted onto the y axis.
-    sigma_max | Numerical | Maximum number of standard deviations (away from the coly mean) before marking a datapoint as being an y axis outlier.
-    df | :pandas.DataFrame: | Dataframe containing these columns of data.
-
-    Returns: :matplotlib.axes.Axes:
-    '''
-    # Initialize figure.
-    fig,ax = plt.subplots()
-    # Isolate the x and y data.
-    x_data,y_data = df[colx],df[coly]
-    # Identify the y axis outliers.
-    outliers_filter = identify_outliers(y_data,sigma_max,[0,100])
-    # Filter data.
-    x_data,y_data = x_data[outliers_filter],y_data[outliers_filter]
-    # Convert filtered data to array of [x,y] points.
-    data = np.vstack([x_data,y_data]).T
-    # Perform DBSCAN clustering.
-    dbscan = cluster.DBSCAN(eps=0.3)
-    dbscan.fit(data)
-    # Extract group indices.
-    y_pred = dbscan.labels_.astype(int)
-    # Designate point colors based on their group.
-    colors = [(mpl.colormaps["tab10"](n) if n>=0 else "k") for n in y_pred]
-    # Plot points after filtering out the y axis outliers.
-    ax.scatter(x_data,y_data,color=colors)
-    # Label axes
-    ax.set_xlabel(colx)
-    ax.set_ylabel(coly)
-    return ax
-
-robust_cluster("Cr2O3","MgO")
-robust_cluster("Cr2O3","MnO")
-plt.show()
-#+END_SRC
-
-#+RESULTS:
-: None
-
-Different filtered oxide component comparisons produce different clusters. Clustering of all data produces no useful results.
-
-#+BEGIN_SRC python :session py
-data = mass_df.to_numpy()
-# Perform DBSCAN clustering.
-dbscan = cluster.DBSCAN(eps=0.3)
-dbscan.fit(data)
-# Extract group indices.
-y_pred = dbscan.labels_.astype(int)
-useful_groups = y_pred[y_pred!=-1]
-print("Number of valid cluster groups:",len(useful_groups))
-#+END_SRC
-
-#+RESULTS:
-: None
-
-The clustering failed to find any valid groups.

@@ -57,7 +57,18 @@
 
 ### Python (pip) Modules
 
-`composition_processor`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `pandas`, `sklearn`, `sys`
+`../XRF_to_PEM/composition_processor.py`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `sys`
+
+
+# EPMA\_data\_analysis/test\_compositional\_difference.ipynb
+
+
+## `EPMA_data_analysis/test_compositional_difference.ipynb`
+
+
+### R Packages
+
+`robCompositions`, `vegan`
 
 
 # XRF\_to\_PEM/XRF-PCA.ipynb

@@ -371,11 +371,11 @@ def plot_umafic_ternary(umafic_compositions):
 plt.figure()
 # Plot protoliths for PEM results from unmodified compositions.
 plot_umafic_ternary(protoliths)
-# plt.show()
+plt.show()
 #+END_SRC
 
 #+RESULTS:
-: TernaryAxes(0.125,0.11;0.775x0.77)
+: None
 
 Preliminary PEM modelling with the compositions as-is returned unexpected results in the ultramafic/mantle protolith.
 
@@ -449,7 +449,7 @@ print(modified_df)
 #+END_SRC
 
 #+RESULTS:
-: {'SiO2': 48.074081902558746, 'Al2O3': 1.6834497122514807, 'CaO': 0.16128859518577063, 'MgO': 41.03786693757951, 'Fe2O3': 0.9647070801969047, 'FeO': 7.812482083116666, 'K2O': 0.02016107439822133, 'Na2O': 0.05040268599555332, 'TiO2': 0.04032214879644266, 'MnO': 0.1411275207875493, 'H2O': 0.0040297219340440825, 'P2O5': 0.010080537199110664}
+: {'SiO2': 48.074082795642745, 'Al2O3': 1.6834497435253386, 'CaO': 0.16128859818206837, 'MgO': 41.03786769995002, 'Fe2O3': 0.9647071334264746, 'FeO': 7.81248033521858, 'K2O': 0.020161074772758546, 'Na2O': 0.05040268693189637, 'TiO2': 0.04032214954551709, 'MnO': 0.14112752340930984, 'H2O': 0.004029722008905215, 'P2O5': 0.010080537386379273}
 
 Due to the non-unique nature of mapping normalized wt% to unnormalized wt%, it's not possible to invert this method. A grid-search of different $f_{Fe3}$ values can be employed to find a suitable value such that the final Fe2O3 wt% = 0.1 wt%. Since the suitable $f_{Fe3}$ value depends on the initial composition (e.g. initial FeO and Fe2O3 wt% values), it is not the same for all samples. Due to the monotonically increasing nature of the relation between $f_{Fe3}$ and Fe2O3 wt%, if a test $f_{Fe3}$ produces Fe2O3 wt% > 0.1, then $f_{Fe3}$ just needs to be reduced and vice versa. As such, a simple range-narrowing iterative algorithm can be produced to find the most-suitable $f_{Fe3}$.
 
@@ -527,11 +527,11 @@ f_Fe3_values = find_Fe3_fractions(compositions,Fe2O3_target)
 #+END_SRC
 
 #+RESULTS:
-: Convergence found: func(0.010356903076171875) ~ 0.10000042083408106
-: Convergence found: func(0.01134490966796875) ~ 0.09999282096247475
-: Convergence found: func(0.009136199951171875) ~ 0.10000684720662864
-: Convergence found: func(0.010356903076171875) ~ 0.09999760786483973
-: Convergence found: func(0.010267257690429688) ~ 0.09999724080622319
+: Convergence found: func(0.010356903076171875) ~ 0.10000042657380336
+: Convergence found: func(0.01134490966796875) ~ 0.09999282576990538
+: Convergence found: func(0.009136199951171875) ~ 0.10000685396866496
+: Convergence found: func(0.010356903076171875) ~ 0.09999761281927519
+: Convergence found: func(0.010267257690429688) ~ 0.09999724575574237
 
 The tolerated $f_{Fe3}$ values for Fe2O3 wt% \approx 0.1 is near 0.01, but with some variation for the different samples (up to +13%). These $f_{Fe3}$ values can be used to correct the Fe oxidation state of observed compositions and then used to find protoliths again.
 
@@ -580,11 +580,11 @@ plt.figure()
 fe_corr_protoliths = extract_umafic_protoliths(dfs)
 # Plot ultramafic protoliths onto an Ol-Opx-Cpx ternary.
 plot_umafic_ternary(fe_corr_protoliths)
-# plt.show()
+plt.show()
 #+END_SRC
 
 #+RESULTS:
-: TernaryAxes(0.125,0.11;0.775x0.77)
+: None
 
 The ultramafic protolith lithologies are starting to lie closer to the expected range (with some even lying /within/ the expected range). However, the protoliths all appear a bit Ol-depleted (and pyroxene-enriched) compared to expected, which is a symptom of SiO2 enrichment.
 ** SiO2 Correction
@@ -641,11 +641,11 @@ print("Fe2O3 wt%%\n%s" % compositions["Fe2O3"])
 
 #+RESULTS:
 #+begin_example
-Convergence found: func(40.771484375) ~ 44.00320591917726
-Convergence found: func(37.1337890625) ~ 44.00150611801924
-Convergence found: func(42.6513671875) ~ 43.998167447670546
-Convergence found: func(41.943359375) ~ 44.0023780362844
-Convergence found: func(41.30859375) ~ 43.99279915792842
+Convergence found: func(40.771484375) ~ 44.00320639441022
+Convergence found: func(37.1337890625) ~ 44.001506657225605
+Convergence found: func(42.6513671875) ~ 43.998167920753886
+Convergence found: func(41.943359375) ~ 44.00237849997184
+Convergence found: func(41.30859375) ~ 43.99279964122063
 Fe2O3 wt%
 23C-06B    0.107927
 23C-06C    0.118486
@@ -713,11 +713,11 @@ plt.figure()
 fe_si_corr_protoliths = extract_umafic_protoliths(dfs)
 # Plot ultramafic protoliths onto an Ol-Opx-Cpx ternary.
 plot_umafic_ternary(fe_si_corr_protoliths)
-# plt.show()
+plt.show()
 #+END_SRC
 
 #+RESULTS:
-: TernaryAxes(0.125,0.11;0.775x0.77)
+: None
 
 With this silica correction added on, the ultramafic protoliths plot much closer to expected, with the samples lying in or very close to the expected range from \cite{Neumann2004}. As such, these updated compositions in =dehyd_compositions_df= are accepted as protolith compositions.
 * Serpentinisation Path Corrections
