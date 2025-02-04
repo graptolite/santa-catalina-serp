@@ -12,8 +12,8 @@ serp = {"07A":"P",
         "M01-vein":"V"}
 # Declare the colors to assign each serpentinization level.
 # P: dark green
-# H: purple
+# H: light pink
 # V: light blue
 cmap = {"P":"#003f00",
-        "H":"#800080",
+        "H":"#ff1493",
         "V":"#00f4ef"}

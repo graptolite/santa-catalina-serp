@@ -75,7 +75,7 @@ class CompositionProcessor():
         # Private (dict) storage for the moles of each oxide.
         self.mol_oxides = None
 
-    def load_composition(self,wt_oxides,oxides):
+    def load_composition(self,wt_oxides,oxides=oxides):
         ''' Store the computed moles of each oxide into private storage dict in format {"<oxide>":<relative moles>}.
 
         Kept as a separate function to the mole computation function to permit calling of that function to return a variable.

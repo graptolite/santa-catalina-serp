@@ -182,11 +182,11 @@ plt.xlabel(r"Temperature /$^{\circ}\text{C}$")
 plt.ylabel("Pressure /bar")
 
 plt.legend()
-# plt.show()
+plt.show()
 #+END_SRC
 
 #+RESULTS:
-: Legend
+: None
 
 * PEM Execution
 The Python code used to interface with =theriak.exe=, and basic plotting methods for its output are not particularly relevant for the purposes of this notebook, and so are stored in the separate file =theriak_api.py=. This commented code file can be inspected in case of interest.
@@ -1026,3 +1026,29 @@ plt.show()
 
 ** Postscript
 To avoid creating and excessively long notebook, result visualization will be handled in a separate notebook (=results.org/results.ipynb=).
+
+* Compositions Used for PEM
+Post-correction (including post apatite correction) compositions can be found and shown from pre-apatite correction compositions:
+
+#+BEGIN_SRC python :session py
+col_order = ["SiO2","TiO2","Al2O3","MnO","MgO","CaO","Na2O","K2O","P2O5","H2O","FeO","Fe2O3","O"]
+
+def apatite_corrected_compositions(composition_df,col_order=col_order):
+    c = CompositionProcessor()
+    apatite_corrected = []
+    for _,row in composition_df.iterrows():
+        c.load_composition(row.to_dict())
+        apatite_corrected.append(c.get_standardised_oxides())
+    apatite_corrected_df = pd.DataFrame(apatite_corrected)
+    apatite_corrected_df.index = composition_df.index
+    for col in col_order:
+        if not col in apatite_corrected_df:
+            apatite_corrected_df[col] = ""
+    return apatite_corrected_df[col_order]
+
+print(apatite_corrected_compositions(dehyd_compositions_df).round(5).to_latex())
+print(apatite_corrected_compositions(hyd_compositions_df).round(5).to_latex())
+#+END_SRC
+
+#+RESULTS:
+: None
