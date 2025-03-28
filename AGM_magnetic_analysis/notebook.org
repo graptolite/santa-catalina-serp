@@ -83,7 +83,7 @@ plt.figure()
 # Iterate through sample slices.
 for sample in samples:
     # Find the hysteresis datafile that represents measurement to the largest applied magnetic field for active sample slice.
-    max_hys_loop_f = sorted([f for f in files if ("2T" in f) and (f"{sample}-" in f) and f.endswith(".hys")])[0]
+    max_hys_loop_f = sorted([f for f in files if ("2T" in f) and (f"{sample}-" in f) and f.endswith(".hys")])[-1]
     # Find a dcd datafile for active sample slice.
     dcd_f = sorted([f for f in files if sample in f and f.endswith(".dcd")])[0]
     # Display which files were used for the active sample slice.

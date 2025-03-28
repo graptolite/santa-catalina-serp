@@ -99,8 +99,8 @@ plt.show()
 The points have significant amounts of each vertex component, but are still clustered together and so not easy to interpret. However, it appears that 06C is much more SiO2 enriched compared to the others.
 
 See =XRF-PCA.org/.ipynb= for PCA analysis (separate notebook to avoid mixing languages/kernels), where outliers are easier to see.
-* Benard et al. 2021 biplots - WARNING: POTENTIAL LICENSING ISSUES
-Geochemical biplots of one oxide against another was used by \cite{Benard2021} to differentiate between mantle from different geological settings. The plots from \cite{Benard2021} (*which are licensed under CC BY-NC-ND so these derivatives can't be published?*) were first manually extracted from the article PDF, converted to SVG format. Computer readability was enhanced by ungrouping all objects, tracing each axis with a single SVG rectangle object (and making sure no other rectangle objects were present), and then grouping the contents of each axis. The axes rectange definitions are extracted for use in matplotlib plot sizing.
+* Benard et al. 2021 biplots
+Geochemical biplots of one oxide against another was used by \cite{Benard2021} to differentiate between mantle from different geological settings. The plots from \cite{Benard2021} were first manually extracted from the article PDF, converted to SVG format. Computer readability was enhanced by ungrouping all objects, tracing each axis with a single SVG rectangle object (and making sure no other rectangle objects were present), and then grouping the contents of each axis. The axes rectange definitions are extracted for use in matplotlib plot sizing.
 
 #+BEGIN_SRC python :session py
 from svg_parsing import *

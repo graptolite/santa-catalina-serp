@@ -5,6 +5,8 @@
 #+TITLE: Effect of Magnetic Grain Alignment on Magnetism Measured at the Surface
 * Introduction
 The effect of subduction-aligned magnetism on the net magnetization measured at the surface (with respect to the magnitude in the orientation of the ambient field) can be modelled by considering the contribution of the subduction-aligned magnetism either in place of locally-aligned magnetisation at depth or opposing localled-aligned magnetisation if a remanence was acquired under a reversed magnetic field.
+
+Though the manuscript is mostly concerned about the existence of subduction-parallel anisotropic magnetisation (which would likely reduce the strength of wedge magnetisation detected at the surface), this notebook also looks that the two options for the orientation of this anisotropic magnetisation (i.e. whether it's pointing down or up along the subduction megathrust) to demonstrate that weakening would be likely in both cases.
 * Outline of Algorithm
 ** Normal Polarisation - Subduction-Aligned Replacing Ambient-Field Aligned Magnetisation
 Where subduction-aligned materials are magnetized in the same direction as the ambient field, their strength relative to if they were aligned to the ambient field is simply the projection of their subduction-aligned orientation onto the orientation of the ambient field.

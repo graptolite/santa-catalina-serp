@@ -898,7 +898,12 @@ plt.show()
 
 
 ** Serpentinisation Path
-The serpentinisation path is more complicated as it involved changing both the P-T and composition along the path. The P-T range to be covered is retrieved from =paths["serpentinisation"]=, and the compositions to be covered are between the protolith and final compositions. With 8 steps in the PEM, the composition will be shifted away from protolith (30%) to final composition (70%) in the first three steps, with the remaining shift towards final composition coming from the remaining 5 steps.
+The serpentinisation path is more complicated as it involved changing both the P-T and composition along the path. The P-T range to be covered is retrieved from =paths["serpentinisation"]=, and the compositions to be covered are between the protolith and final compositions. With 8 steps in the PEM, the composition will be shifted away from protolith (30%) to final composition (70%) in the first two steps, with the remaining shift towards final composition coming from the remaining six steps. This is the case when $PT_{0.7}$ is set to 30%. $PT_{0.7}$ can be varied.
+- Where $PT_{0.7}$ is the \textit{P-T} condition when \(C_{in} = 0.7(C_{final} - C_{proto}) + C_{proto}\) (where $C$ is composition and the subscript denotes \textit{in}put, \textit{proto}lith (initial) and \textit{final})
+
+#+BEGIN_SRC python :session py
+PTpointseven = 30 / 100 # 30%
+#+END_SRC
 
 Intermediate compositions will be treated as linear mixtures between the two endpoint composition.
 
@@ -930,8 +935,8 @@ def mix_endmembers(endmember_1,endmember_2,frac_2):
 
 # Function to set the first three values in a list on n numbers to values increasing linearly from 0 to 0.7, with the remaining values increasing linearly to 1.
 # Intended to represent the fraction of the post-serpentinisation composition in a mixture of the pre- and post-serpentinisation compositions.
-interp_coords_f = lambda n : np.append(np.linspace(0,0.7,3),
-                            np.linspace(0.7,1,n-2)[1:],axis=0)
+interp_coords_f = lambda n : np.append(np.linspace(0,0.7,int(PTpointseven*n)),
+                            np.linspace(0.7,1,n-(int(PTpointseven*n)-1))[1:],axis=0)
 #+END_SRC
 
 #+RESULTS:

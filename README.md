@@ -1,16 +1,17 @@
-Code written for a UNIX environment with Python 3.11 and R 4.2.2.
+Code written for a UNIX environment with [Python](https://www.python.org/) 3.11 and [R](https://www.r-project.org/) 4.2.2.
+
+The purpose of each notebook with respect to the main text and supplementary information (SI) is stated within each section below.
 
 
 # AGM\_magnetic\_analysis/notebook.ipynb
 
 Parse magnetic data produced using the Alternating Gradient Magnetometer at Cambridge, including:
 
--   Producing a Day Plot
-    -   Figure 24 of `write.pdf`
--   Plotting FORC collections and FORC diagrams (though with much less sophistication compared to FORCinel).
-    -   `raw_forcs.pdf`
 -   Vizualising the output of FORC PCA performed in FORCinel.
-    -   Figure 26 of `write.pdf`
+    -   Figure 3 of main text
+-   Producing a Day Plot
+    -   Figure 5 of main text
+-   Plotting FORC collections and FORC diagrams (though with much less sophistication compared to FORCinel) for quick view.
 
 
 ## Dependencies
@@ -25,7 +26,7 @@ Parse magnetic data produced using the Alternating Gradient Magnetometer at Camb
 
 Plot half rose diagrams of manually drawn SVG lines that represent the long axes of different features (most notably clinochlore grains) on a thin section scan.
 
--   Figure 13 of `write.pdf`
+-   Supports the results of main text (clinochlore and magnetite approximately aligned in a fabric)
 
 
 ## Dependencies
@@ -40,7 +41,7 @@ Plot half rose diagrams of manually drawn SVG lines that represent the long axes
 
 Plot EBSD orientations (about 3 orthogonal axes) with a ternary (R,G,B) colormap.
 
--   Figure 10 of `supp.pdf`
+-   Figure S10 of SI
 
 
 ## Dependencies
@@ -53,13 +54,19 @@ Plot EBSD orientations (about 3 orthogonal axes) with a ternary (R,G,B) colormap
 
 # EPMA\_data\_analysis/notebook.ipynb
 
-Match EBSD data to compositions from Webmineral to try and identify minerals.
+For the locations of EPMA spot analyses, see https://doi.org/10.5281/zenodo.13685581.
 
--   Section 2 of `supp.pdf`
+Process EPMA data.
+
+-   Table S5 and S6 of SI
+
+Match EPMA data to compositions from Webmineral to try and identify minerals.
+
+-   Text S3 of SI
 
 Also compare compositional properties between early- and late-formed clinochlore grains (determined petrographically).
 
--   Figure 5 of `supp.pdf`
+-   Not in main text or SI but may be of interest
 
 
 ## Dependencies
@@ -72,7 +79,9 @@ Also compare compositional properties between early- and late-formed clinochlore
 
 # EPMA\_data\_analysis/magnetite\_as\_oxides.ipynb
 
-Convert element wt% to oxide wt% for the "magnetites" and investigate the result.
+Convert element wt% to oxide wt% for the "magnetites" and investigate compositional differences in the magnetites of partially vs heavily serpentinized rocks.
+
+-   Cr comparison: Figure S4 of SI
 
 
 ## Dependencies
@@ -83,73 +92,13 @@ Convert element wt% to oxide wt% for the "magnetites" and investigate the result
 `../XRF_to_PEM/composition_processor.py`, `matplotlib.pyplot`, `numpy`, `os`, `pandas`, `sys`
 
 
-# EPMA\_data\_analysis/test\_compositional\_difference.ipynb
-
-Use PERMANOVA/PERMDISP to test for a difference between the multivariate compositions of magnetite from partially vs heavily serpentinized samples.
-
-
-## Dependencies
-
-
-### R Packages
-
-`robCompositions`, `vegan`
-
-
-### System Packages
-
-`R`
-
-
-# XRF\_to\_PEM/XRF-PCA.ipynb
-
-Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
-
--   Perform PCA on selected oxide components from XRF data.
-    -   Figure 16 of `write.pdf`
-
-
-## Dependencies
-
-
-### R Packages
-
-`robCompositions`, `dplyr`
-
-
-### System Packages
-
-`R`
-
-
-# XRF\_to\_PEM/XRF\_plots.ipynb
-
-Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
-
--   Produces ternary plots of selected oxide components from XRF data.
-    -   Section 5 of `supp.pdf`
--   Plots compositions onto Benard et al.'s composition biplots (for provenance).
-    -   Figure 15 of `write.pdf`
-
-
-## Dependencies
-
-
-### Python (pip) Modules
-
-`IPython.display`, `io`, `matplotlib.pyplot`, `matplotlib`, `mpltern`, `numpy`, `os`, `pandas`, `re`, `subprocess`
-
-
-### System Packages
-
-`inkscape`
-
-
 # XRF\_to\_PEM/notebook.ipynb
 
 Normalize raw XRF compositional data for Phase Equilibrium Modelling (PEM), and execute PEM on all serpentinite samples from the XRF data.
 
--   Data for Figure 23 of `write.pdf`
+-   <span class="underline">P-T</span> history plot for Figure 1 of main text
+-   Protolith positions on ultramafic ternary diagrams for Figure S1 of SI
+-   Data for Figure 6 of main text and Figures S10-S16 of SI ($PT_{0.7}$ can be changed in the `Serpentinisation Path` section)
 
 
 ## Dependencies
@@ -165,12 +114,54 @@ Normalize raw XRF compositional data for Phase Equilibrium Modelling (PEM), and 
 `wine`
 
 
+# XRF\_to\_PEM/XRF\_plots.ipynb
+
+Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
+
+-   Produces ternary plots of selected oxide components from XRF data.
+    -   Section 5 of `supp.pdf`
+-   Plots compositions onto Benard et al.'s composition biplots (for provenance). Not important for the paper but may be of interest for future study.
+
+
+## Dependencies
+
+
+### Python (pip) Modules
+
+`IPython.display`, `io`, `matplotlib.pyplot`, `matplotlib`, `mpltern`, `numpy`, `os`, `pandas`, `re`, `subprocess`
+
+
+### System Packages
+
+`inkscape`
+
+
+# XRF\_to\_PEM/XRF-PCA.ipynb
+
+Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
+
+Performs PCA on XRF compositions of the 5 samples, identifying possible groups corresponding to different regions of the composition biplots. Not important for the paper but may be of interest for future study.
+
+
+## Dependencies
+
+
+### R Packages
+
+`robCompositions`, `dplyr`
+
+
+### System Packages
+
+`R`
+
+
 # XRF\_to\_PEM/results.ipynb
 
 Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
 
 -   Plots the output of PEM in volume stackplots.
-    -   Figure 23 of `write.pdf`
+    -   Figure 6 of main text and Figures S10-S16 of SI
 
 
 ## Dependencies
@@ -190,7 +181,7 @@ Requires `XRF_to_PEM/notebook.ipynb` to be run beforehand.
 
 Process data to find sample density and average color properties, and then compare the two for use as serpentinization indicators.
 
--   Figure 14, Tables 4 and 5 of `write.pdf`
+-   Figure S3 of SI
 
 
 ## Dependencies
@@ -205,8 +196,7 @@ Process data to find sample density and average color properties, and then compa
 
 Model the effect of subduction-aligned remanent magnetization on hypothetical, surface-measured magnetization.
 
--   Figure 33 of `write.pdf`
--   Section 11 of `supp.pdf`
+-   Supports the subsection Subduction Zone Magnetic Structure (of Discussion) of main text.
 
 
 ## Dependencies
@@ -217,22 +207,9 @@ Model the effect of subduction-aligned remanent magnetization on hypothetical, s
 `matplotlib.pyplot`, `matplotlib`, `numpy`
 
 
-# reflector\_grain\_orientations/notebook.ipynb
-
-Filter detected reflector grains by area, orientation and elongation, and plot them on top of reflected light scans. **reflector\_processing/section-scans-refined-full/working.ipynb must be run beforehand** with the same desired `kernel_px` variable from this notebook in the `dilate_erode` variable in that notebook to generate the necessary (filtered) data.
-
--   `grain-orientation-checking.pdf`
-
-
-## Dependencies
-
-
-### Python (pip) Modules
-
-`PIL`, `cv2`, `matplotlib.collections`, `matplotlib.patches`, `matplotlib.pyplot`, `matplotlib`, `numpy`, `os`, `shapely`, `tqdm`
-
-
 # reflector\_processing/\*
+
+These notebooks extract reflector (magnetite) grain shapes from reflected light scans. The results of this notebook are not important for the main text or SI but may be of interest to future work.
 
 This collection of notebooks captures the iterative improvement of the reflector grain extraction code in the following order:
 
@@ -241,6 +218,8 @@ This collection of notebooks captures the iterative improvement of the reflector
 3.  reflector\_processing/section-scans-full-evaluation/working.ipynb: compare the results of the reflector grain extraction algorithm to manually extracted grains for one instance.
 4.  reflector\_processing/section-scans-full-evaluation/further-analysis.ipynb: visually compare the results of the reflector grain extraction algorithm with slightly different parameters to expected to find the optimal parameter. Also develop a new processing algorithm where the fine grains are removed prior to the dilate-erode process. `reflector_processing/section-scans-full/working.ipynb` must have been run for the dilate-erode option in this notebook to work (as it reads data generated by that notebook).
 5.  reflector\_processing/section-scans-refined-full/working.ipynb: repeat the process of section-scans-full but with a removal of fine grains ("noise") prior to the dilate-erode process. Also save post-processed contours without truncating maximum area - i.e. saving an extended reflector grain dataset. These extended datasets may also be used by reflector\_grain\_orientations/notebook.ipynb.
+
+For the full size reflected light scans (.tif files), see https://doi.org/10.5281/zenodo.13329989.
 
 
 ## reflector\_processing/section-scans-runthrough-example/working.ipynb
@@ -311,9 +290,13 @@ Notebook applying some methods described in the Kretz 1969 paper to check for th
 
 # vein\_transects/server.py
 
-Produce and analyze vein profiles.
+Produce and analyze vein profiles and maps from EDS maps.
 
--   Figure 19 of `write.pdf`
+-   Table S7 and Figure S19 of SI
+
+For the EDS maps used in this study, see https://doi.org/10.5281/zenodo.13351361.
+
+For plots that have already been made, see https://doi.org/10.5281/zenodo.13685560.
 
 
 ## Dependencies

@@ -74,7 +74,7 @@ import matplotlib.pyplot as plt
 # Dictionary to map sample name to recorded host mineral.
 sample_map = dict(zip(df["Comment"],df["Mineral"]))
 
-classification = {"Partially":["M04","M08"],
+classification = {"Partially":["M04","MO4","M08"], # M04 was misnamed as MO4 but both are the same sample.
                   "Heavily":["06C","M01"]}
 dfs = dict()
 cr2o3s = []
@@ -118,7 +118,7 @@ for name,samples in classification.items():
 
 plt.boxplot(TiO2s)
 plt.gca().set_xticks([1,2],["P","H"])
-plt.ylabel("Cr wt%")
+plt.ylabel("Ti wt%")
 plt.show()
 #+END_SRC
 
