@@ -32,3 +32,4 @@
 !**/EPMA_data_analysis/*.ipynb
 !**/EPMA_data_analysis/*.org
 !**/EPMA_data_analysis/imgs/*
+!**/XRF_to_PEM/theriak/td-test.txt
