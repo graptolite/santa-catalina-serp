@@ -89,12 +89,31 @@ for name,samples in classification.items():
 
 plt.boxplot(cr2o3s)
 plt.gca().set_xticks([1,2],["P","H"])
-plt.ylabel("Cr wt%")
+plt.ylabel("Cr2O3 wt%")
 plt.show()
 #+END_SRC
 
 #+RESULTS:
 : None
+
+An additional way to test for difference in the distributions (without making too many assumptions on the underlying distribution i.e., a non-parametric test) is using the Mann-Whitney U test. To more specifically test whether the heavily serpentinised samples are more Cr-rich than the partially serpentinised samples, a directional alternative hypothesis will be used.
+
+#+BEGIN_SRC python :session py
+from scipy.stats import mannwhitneyu
+alpha = 0.05
+p_serp = cr2o3s[0]
+h_serp = cr2o3s[1]
+U,p = mannwhitneyu(h_serp,p_serp,alternative="greater")
+U,p = mannwhitneyu(h_serp,p_serp,alternative="greater")
+if p < alpha:
+    print("Significantly different")
+else:
+    print("Not significantly different")
+#+END_SRC
+
+#+RESULTS:
+
+This result suggests that there's a significant difference at alpha level 0.05 (with the p value being 0.01). It should be noted that the data is compositional rather than unconstrained and so this test is not the most accurate. However, as the wt% is ultimately used to distinguish ferritchromite from Cr-magnetite, and with the p value being much lower than the alpha level, this result will be taken to represent a likely greater proportion of high Cr iron oxide (ferritchromite) in heavily compared to partially serpentinised samples.
 ** Ti Comparison
 #+BEGIN_SRC python :session py
 import numpy as np
@@ -103,7 +122,7 @@ import matplotlib.pyplot as plt
 # Dictionary to map sample name to recorded host mineral.
 sample_map = dict(zip(df["Comment"],df["Mineral"]))
 
-classification = {"Partially":["M04","M08"],
+classification = {"Partially":["M04","MO4","M08"],
                   "Heavily":["06C","M01"]}
 dfs = dict()
 TiO2s = []
@@ -118,7 +137,7 @@ for name,samples in classification.items():
 
 plt.boxplot(TiO2s)
 plt.gca().set_xticks([1,2],["P","H"])
-plt.ylabel("Ti wt%")
+plt.ylabel("TiO2 wt%")
 plt.show()
 #+END_SRC
 

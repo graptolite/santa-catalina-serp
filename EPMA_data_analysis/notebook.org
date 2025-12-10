@@ -8,7 +8,7 @@ Data collected during EMPA analyses contain weight percent elements (or permit s
 
 Though Webmineral's composition querying is limited to 3 elements at most, the 3 most adundant elements tend to combine to constitute the vast majority of the phase's weight. However, it remains useful to manually check the sensibility of results, and to find multiple matches (within some percentage tolerance of the observed composition).
 * Raw Data Processing
-Alongside compositional data in a tab-separated table format, the raw data files also contains metadata for the EPMA analysis. In this case, the two files of interest are =2024-04-16-v1.txt= (magnetites) and =2024-04-17-v1.txt= (silicates).
+Alongside compositional data in a tab-separated table format, the raw data files also contains metadata for the EPMA analysis. In this case, the two files of interest are =2024-04-16-v1.txt= (magnetites) and =2024-04-17-v1.txt= (silicates). It should be noted that for the magnetites dataset, spot measurements 23C-06C-clc7 and 23C-06C-clc9, which were meant to be of magnetites associated with clinochlore, appear more likely to be of the clinochlore on the basis of their high Si (>10 wt%), Mg (>20 wt%), and general dissimilarity to the other 23C-06C-clc magnetite measurements. As such, they are removed from further analysis by the hardcoded mineral classifier in the later function =add_to_df_or_not=.
 
 Units are wt%.
 
@@ -102,7 +102,7 @@ def add_to_df_or_not(composition_df,f):
         # Assigned to the sites which can be checked against RL scans of the sites in ../DATASETS/EPMA/sites/*
         minerals = ["srp","","srp","srp","srp","srp","srp","srp","srp","srp",
                 "srp","srp","srp","srp","srp","srp","srp","srp","srp","srp",
-                "srp","srp","srp","srp","srp","srp","clc","clc","clc","clc",
+                "srp","srp","srp","srp","srp","srp","","clc","","clc",
                 "clc","clc","clc","srp","srp","srp","srp","srp","srp","srp",
                 "srp","","clc","clc","srp","srp","srp","srp","srp","srp",
                 "srp","srp","srp","srp","srp","vein","srp","vein","srp","srp",
