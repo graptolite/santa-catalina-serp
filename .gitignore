@@ -2,8 +2,10 @@
 
 !.gitignore
 
-!**/DATASETS/*/*
-!**/DATASETS/PHYSICAL/sample_imagery/*
+!*/DATASETS/*
+!*/DATASETS/*/*
+!*/DATASETS/T-X_Data/*/*.txt
+!*/DATASETS/PHYSICAL/sample_imagery/*
 
 !*.org
 
@@ -15,6 +17,7 @@
 !*.tiff
 !vein_transects/vein-paths/example-path.txt
 !*.csv
+!*.txt
 !*/imgs/*
 !*/local_data/*
 
